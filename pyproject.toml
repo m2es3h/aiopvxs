@@ -1,8 +1,20 @@
 [build-system]
 requires = [
-	"setuptools",
-	"wheel",
-    "pybind11",
+    "setuptools",
+    "wheel",
+    "pybind11>=3.0",
     "pvxslibs==1.4.0",
-    "epicscorelibs",
+    "epicscorelibs>=7.0",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aiopvxs"
+version = "0.1.0"
+authors = [{name = "Mike Smith", email = "m2es3h@gmail.com"}]
+description = "Python asyncio API to the PVXS libraries"
+readme = "README.md"
+dependencies = [
+    "pvxslibs==1.4.0",
+    "epicscorelibs>=7.0",
 ]

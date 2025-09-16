@@ -1,43 +1,37 @@
-from setuptools import setup, Extension
-import pybind11
-import pvxslibs
-import epicscorelibs
+from site import getsitepackages, getusersitepackages
 
+import epicscorelibs
+import pvxslibs
+from pybind11.setup_helpers import Pybind11Extension
+from setuptools import setup
+
+# get paths to pvxslibs and epicscore libraries DSOs
+compiletime_dirs = [*pvxslibs.__path__, *epicscorelibs.__path__]
+runtime_dirs = [*getsitepackages(), getusersitepackages(), "@loader_path"]
+
+# declare pybind11 extension
 ext_modules = [
-    Extension(
-        'aiopvxs',
-        ['src/aiopvxs.cpp'],
+    Pybind11Extension(
+        name = 'aiopvxs',
+        sources = [
+            'src/aiopvxs.cpp'
+        ],
         include_dirs=[
-            pybind11.get_include(),
-            *[p + "/include" for p in pvxslibs.__path__],
-            *[p + "/include" for p in epicscorelibs.__path__],
+            f"{mod_dir}/include" for mod_dir in compiletime_dirs
         ],
         library_dirs=[
-            *[p + "/lib" for p in pvxslibs.__path__],
-            *[p + "/lib" for p in epicscorelibs.__path__],
+            f"{mod_dir}/lib" for mod_dir in compiletime_dirs
         ],
         runtime_library_dirs=[
-            *[p + "/lib" for p in pvxslibs.__path__],
-            *[p + "/lib" for p in epicscorelibs.__path__],
+            *[f"{base_dir}/pvxslibs/lib" for base_dir in runtime_dirs],
+            *[f"{base_dir}/epicscorelibs/lib" for base_dir in runtime_dirs],
         ],
-        libraries=[
-            "pvxs",
-            "event_core",
-            "event_pthread",
-            "Com",
-            "pvAccess",
-            "pvData"
-        ],
+        libraries=["pvxs", "event_core", "Com"],
         language='c++',
+        cxx_std=11,
     ),
 ]
 
 setup(
-    name='pyvxs',
-    version='0.1.0',
     ext_modules=ext_modules,
-    install_requires=[
-        "pvxslibs==1.4.0",
-    ],
-    zip_safe=False,
 )
