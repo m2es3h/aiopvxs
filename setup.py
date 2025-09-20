@@ -14,7 +14,10 @@ ext_modules = [
     Pybind11Extension(
         name = 'aiopvxs',
         sources = [
-            'src/aiopvxs.cpp'
+            'src/aiopvxs.cpp',
+            'src/client.cpp',
+            'src/data.cpp',
+            'src/nt.cpp',
         ],
         include_dirs=[
             f"{mod_dir}/include" for mod_dir in compiletime_dirs
