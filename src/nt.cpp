@@ -5,6 +5,7 @@
 
 namespace py = pybind11;
 
+
 void create_submodule_nt(py::module_& m) {
     m.doc() = "Normative Type definitions";
 

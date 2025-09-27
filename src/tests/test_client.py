@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 from pytest import FixtureRequest
 from aiopvxs.client import Context
+from aiopvxs.data import Value
 from asyncio import wait_for, CancelledError
 
 _log = logging.getLogger(__file__)
@@ -19,17 +20,9 @@ class TestClient:
 
     async def test_get(self, pvxs_context : AsyncMock):
         client = pvxs_context
-        _log.info(pvxs_context)
         get_op =  client.get("some:pv:name")
         val = await get_op
-        """
-        print("-----")
-        print(int(val.get("value")), type(val.value.as_string()))
-        print("-----")
-        print(repr(val.value))
-        print("-----")
-        print(str(val.value))
-        """
+        assert isinstance(val, Value)
     
     async def test_get_cancel(self, pvxs_context : AsyncMock):
         client = pvxs_context
