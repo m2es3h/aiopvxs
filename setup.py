@@ -18,6 +18,7 @@ ext_modules = [
             'src/client.cpp',
             'src/data.cpp',
             'src/nt.cpp',
+            'src/server.cpp',
         ],
         include_dirs=[
             f"{mod_dir}/include" for mod_dir in compiletime_dirs

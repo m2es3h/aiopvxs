@@ -11,12 +11,14 @@ void create_submodule_nt(py::module_& m) {
 
     using namespace pvxs::nt;
 
-    py::class_<pvxs::nt::NTScalar>(m, "NTScalar")
+    py::class_<NTScalar>(m, "NTScalar")
         .def(py::init<pvxs::TypeCode::code_t>())
-        .def("create", &pvxs::nt::NTScalar::create);
+        .def("build", &NTScalar::build)
+        .def("create", &NTScalar::create);
 
-    py::class_<pvxs::nt::NTEnum>(m, "NTEnum")
+    py::class_<NTEnum>(m, "NTEnum")
         .def(py::init<>())
-        .def("create", &pvxs::nt::NTEnum::create);
+        .def("build", &NTEnum::build)
+        .def("create", &NTEnum::create);
 
 }

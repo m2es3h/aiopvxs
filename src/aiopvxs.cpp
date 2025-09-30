@@ -8,6 +8,7 @@ namespace py = pybind11;
 void create_submodule_client(py::module_&);
 void create_submodule_data(py::module_&);
 void create_submodule_nt(py::module_&);
+void create_submodule_server(py::module_&);
 
 
 PYBIND11_MODULE(aiopvxs, m) {
@@ -25,5 +26,7 @@ PYBIND11_MODULE(aiopvxs, m) {
     create_submodule_data(data);
     py::module_ nt = m.def_submodule("nt");
     create_submodule_nt(nt);
+    py::module_ server = m.def_submodule("server");
+    create_submodule_server(server);
 
 }

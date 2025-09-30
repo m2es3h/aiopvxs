@@ -1,35 +1,86 @@
+import pytest
+import logging
+import sys
+
 from aiopvxs.data import TypeCodeEnum as T, TypeDef, Member as M
 from aiopvxs.nt import NTScalar, NTEnum
 
-"""
-x = TypeDef(T.Bool).create()
-y0 = M(T.String, "desc")
-y1 = M(T.Bool, "flag")
-y2 = M(T.Int8, "number32")
-y3 = M(T.Int64, "number64")
-y4 = M(T.Struct, "substruct", set({y1, y2, y3}))
-
-print(repr(x))
-
-z = TypeDef(T.Struct, [y0, y1, y2, y4])
-print(repr(z))
+_log = logging.getLogger(__file__)
 
 
-val = z.create()
-print("number32 exists ", val.number32)
-val["number32"] = 977
-print("number32 exists ", val.number32)
+class TestScalar:
 
-val.desc = "some string"
-val.flag = True
-val.number32 = 988
-val.substruct.flag = False
-val.substruct.number32 = 32
-val.substruct["number64"] = 64
-print(repr(val))
+    @pytest.mark.parametrize('nt_numeric_scalars', [
+        (NTScalar(T.UInt8), 2**8-1),
+        (NTScalar(T.UInt16), 2**16-1),
+        (NTScalar(T.UInt32), 2**32-1),
+        (NTScalar(T.UInt64), sys.maxsize),
+        (NTScalar(T.Int8), -2**7),
+        (NTScalar(T.Int16), -2**15),
+        (NTScalar(T.Int32), -2**31),
+        (NTScalar(T.Int64), -sys.maxsize),
+        (NTScalar(T.Float32), -42.2411167),
+        (NTScalar(T.Float64), -42.24111000167),
+    ], ids=[
+        'uint8',
+        'uint16',
+        'uint32',
+        'uint64',
+        'int8',
+        'int16',
+        'int32',
+        'int64',
+        'float32',
+        'float64',
+    ], indirect=False)
+    def test_wrap_numeric_types(self, nt_numeric_scalars : tuple):
+        nt_type, py_value = nt_numeric_scalars
 
+        nt_value = nt_type.create()
+        nt_value['value'] = py_value
+        assert bool(nt_value.value) == bool(py_value)
+        assert int(nt_value.value) == int(py_value)
+        assert float(nt_value.value) == pytest.approx(float(py_value))
+        if isinstance(py_value, float):
+            # pvxs .as_string() rounds to 4 digits
+            assert str(nt_value.value) == str(round(py_value, 4))
 
-nt_val = NTScalar(T.Int32).create();
-nt_val = NTEnum().create();
-print(repr(nt_val))
-"""
+    @pytest.mark.parametrize('nt_boolean_scalars', [
+        (NTScalar(T.UInt32), 0),
+        (NTScalar(T.Int32), 0),
+        (NTScalar(T.Float32), 0),
+        (NTScalar(T.Bool), False),
+        (NTScalar(T.Bool), True),
+    ], ids=[
+        'uint32',
+        'int32',
+        'float32',
+        'False',
+        'True',
+    ], indirect=False)
+    def test_wrap_boolean_types(self, nt_boolean_scalars : tuple):
+        nt_type, py_value = nt_boolean_scalars
+
+        nt_value = nt_type.create()
+        nt_value['value'] = py_value
+        assert bool(nt_value.value) == bool(py_value)
+        assert int(nt_value.value) == int(py_value)
+        # pvxs returns "true/false" all lowercase
+        assert str(nt_value.value) == str(py_value).lower()
+
+    @pytest.mark.parametrize('nt_enum', [
+        (NTEnum(), {'index': 2, 'choices': ['zero', 'one', 'two', 'three']}),
+        (NTEnum(), 2),
+        (NTEnum(), 'two'),
+    ], ids=[
+        'dict',
+        'index',
+        'label',
+    ], indirect=False)
+    def test_wrap_enum_type(self, nt_enum : tuple):
+        nt_type, py_value = nt_enum
+
+        nt_value = nt_type.create()
+        nt_value['value'] = py_value
+        assert int(nt_value.value) == int(py_value)
+        assert str(nt_value.value) == str(py_value)

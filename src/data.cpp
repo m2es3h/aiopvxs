@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -33,6 +35,7 @@ void create_submodule_data(py::module_& m) {
 
     py::class_<TypeCode>(m, "TypeCode")
         .def_readonly("code", &TypeCode::code)
+        .def("name", &TypeCode::name)
         .def("is_unsigned", &TypeCode::isunsigned)
         .def("is_array", &TypeCode::isarray);
 
@@ -84,9 +87,17 @@ void create_submodule_data(py::module_& m) {
             return self.lookup(name);
         })
 
+        .def("as_bool", static_cast<bool (Value::*)(void) const>(&Value::as<bool>))
+        .def("__bool__",  static_cast<bool (Value::*)(void) const>(&Value::as<bool>))
+
         .def("as_int32", static_cast<int32_t (Value::*)(void) const>(&Value::as<int32_t>))
+        //.def("from_int32", static_cast<void (Value::*)(const int32_t&)>(&Value::from<int32_t>))
         .def("as_int64", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>))
         .def("__int__",  static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>))
+
+        .def("as_float32", static_cast<float (Value::*)(void) const>(&Value::as<float>))
+        .def("as_float64", static_cast<double (Value::*)(void) const>(&Value::as<double>))
+        .def("__float__",  static_cast<double (Value::*)(void) const>(&Value::as<double>))
 
         .def("as_string", static_cast<std::string (Value::*)(void) const>(&Value::as<std::string>))
         .def("__str__", [](const Value& self){
