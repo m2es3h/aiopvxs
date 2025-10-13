@@ -97,6 +97,8 @@ void create_submodule_data(py::module_& m) {
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>))
+        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>))
+        /*
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint8_t>&)>(&Value::update<const shared_array<const uint8_t>&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint16_t>&)>(&Value::update<const shared_array<const uint16_t>&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint32_t>&)>(&Value::update<const shared_array<const uint32_t>&, std::string&>))
@@ -107,10 +109,13 @@ void create_submodule_data(py::module_& m) {
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int64_t>&)>(&Value::update<const shared_array<const int64_t>&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const float>&)>(&Value::update<const shared_array<const float>&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const double>&)>(&Value::update<const shared_array<const double>&, std::string&>))
+        */
 
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>))
+        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>))
+        /*
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint8_t>&)>(&Value::update<const shared_array<const uint8_t>&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint16_t>&)>(&Value::update<const shared_array<const uint16_t>&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint32_t>&)>(&Value::update<const shared_array<const uint32_t>&, std::string&>))
@@ -121,6 +126,7 @@ void create_submodule_data(py::module_& m) {
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int64_t>&)>(&Value::update<const shared_array<const int64_t>&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const float>&)>(&Value::update<const shared_array<const float>&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const double>&)>(&Value::update<const shared_array<const double>&, std::string&>))
+        */
 
         .def("get", [](const Value& self, const std::string& name) {
             return self.lookup(name);
@@ -132,6 +138,7 @@ void create_submodule_data(py::module_& m) {
         .def("as_int", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>))
         .def("__int__",  static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>))
 
+        .def("as_list", static_cast<shared_array<const void> (Value::*)(void) const>(&Value::as<shared_array<const void>>))
         .def("as_int_list", static_cast<shared_array<const int64_t> (Value::*)(void) const>(&Value::as<shared_array<const int64_t>>))
         .def("as_float_list", static_cast<shared_array<const double> (Value::*)(void) const>(&Value::as<shared_array<const double>>))
         //.def("as_string_list", static_cast<shared_array<const std::string> (Value::*)(void) const>(&Value::as<shared_array<const std::string>>))
