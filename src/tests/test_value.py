@@ -1,3 +1,4 @@
+import array
 import pytest
 import logging
 import sys
@@ -85,27 +86,51 @@ class TestScalar:
 
         nt_value = nt_type.create()
         nt_value['value'] = py_value
-        _log.info("%s", repr(nt_value['value']))
         assert nt_value.value.index == py_value['index']
         assert nt_value.value.choices == py_value['choices']
 
-    @pytest.mark.parametrize('nt_numeric_arrays', [
-        (NTScalar(T.Int8A), [-2**7]*3),
-        (NTScalar(T.Int16A), [-2**15]*3),
-        (NTScalar(T.Int32A), [-2**31]*3),
-        (NTScalar(T.Int64A), [-sys.maxsize]*3),
+    @pytest.mark.parametrize('nt_integer_arrays', [
+        (NTScalar(T.UInt8A),  'B', [2**7]*3),
+        (NTScalar(T.UInt16A), 'H', [2**15]*3),
+        (NTScalar(T.UInt32A), 'I', [2**31]*3),
+        (NTScalar(T.UInt64A), 'Q', [sys.maxsize]*3),
+        (NTScalar(T.Int8A),   'b', [-2**7]*3),
+        (NTScalar(T.Int16A),  'h', [-2**15]*3),
+        (NTScalar(T.Int32A),  'i', [-2**31]*3),
+        (NTScalar(T.Int64A),  'q', [-sys.maxsize]*3),
     ], ids=[
+        'uint8',
+        'uint16',
+        'uint32',
+        'uint64',
         'int8',
         'int16',
         'int32',
         'int64',
     ], indirect=False)
-    def test_wrap_array_types(self, nt_numeric_arrays : tuple):
-        nt_type, py_value = nt_numeric_arrays
+    def test_wrap_array_of_ints(self, nt_integer_arrays : tuple):
+        nt_type, pyarray_type, py_value = nt_integer_arrays
 
         nt_value = nt_type.create()
-        _log.info("PYTHON VALUE GOING IN %s", py_value)
-        nt_value['value'] = py_value
-        _log.info("NT VALUE THAT WAS SET %s", repr(nt_value))
+        nt_value['value'] = array.array(pyarray_type, py_value)
         assert isinstance(nt_value.value, Value)
         assert nt_value.value.as_int_list() == py_value
+
+    @pytest.mark.parametrize('nt_float_arrays', [
+        (NTScalar(T.Float32A), 'f', [-42.24111557]*3),
+        (NTScalar(T.Float64A), 'd', [-42.24111000167]*3),
+    ], ids=[
+        'float',
+        'double',
+    ], indirect=False)
+    def test_wrap_array_of_floats(self, nt_float_arrays : tuple):
+        nt_type, pyarray_type, py_value = nt_float_arrays
+
+        nt_value = nt_type.create()
+        nt_value['value'] = array.array(pyarray_type, py_value)
+        assert isinstance(nt_value.value, Value)
+        if pyarray_type == 'f':
+            rounded_nt_vals = [round(v, 8) for v in nt_value.value.as_float_list()]
+            assert rounded_nt_vals == py_value
+        else:
+            assert nt_value.value.as_float_list() == py_value
