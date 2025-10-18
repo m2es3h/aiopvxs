@@ -114,7 +114,8 @@ class TestScalar:
         nt_value = nt_type.create()
         nt_value['value'] = array.array(pyarray_type, py_value)
         assert isinstance(nt_value.value, Value)
-        assert nt_value.value.as_int_list() == py_value
+        assert nt_value.value.as_list() == py_value
+        assert nt_value.value.as_float_list() == [float(x) for x in py_value]
 
     @pytest.mark.parametrize('nt_float_arrays', [
         (NTScalar(T.Float32A), 'f', [-42.24111557]*3),
@@ -130,7 +131,9 @@ class TestScalar:
         nt_value['value'] = array.array(pyarray_type, py_value)
         assert isinstance(nt_value.value, Value)
         if pyarray_type == 'f':
-            rounded_nt_vals = [round(v, 8) for v in nt_value.value.as_float_list()]
+            rounded_nt_vals = [round(v, 8) for v in nt_value.value.as_list()]
             assert rounded_nt_vals == py_value
         else:
-            assert nt_value.value.as_float_list() == py_value
+            assert nt_value.value.as_list() == py_value
+
+        assert nt_value.value.as_int_list() == [int(x) for x in py_value]

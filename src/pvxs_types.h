@@ -6,6 +6,84 @@
 namespace py = pybind11;
 using namespace pvxs;
 
+template <typename T>
+bool make_shared_array(const py::buffer_info& info, shared_array<const void>& sa) {
+    auto arr_begin = static_cast<const T*>(info.ptr);
+    auto arr_end = static_cast<const T*>(arr_begin + info.shape[0]);
+    sa = shared_array<const T>(arr_begin, arr_end).template castTo<const void>();
+    return true;
+}
+
+bool load_from_python_array(const py::buffer src, shared_array<const void>& sa) {
+    py::buffer_info info = src.request();
+
+    // veify buffer is 1D
+    if (info.ndim != 1) {
+        return false;
+    }
+    else if (info.item_type_is_equivalent_to<uint8_t>()) {
+        return make_shared_array<uint8_t>(info, sa);
+    }
+    else if (info.item_type_is_equivalent_to<uint16_t>()) {
+        return make_shared_array<uint16_t>(info, sa);
+    }
+    else if (info.item_type_is_equivalent_to<uint32_t>()) {
+        return make_shared_array<uint32_t>(info, sa);
+    }
+    else if (info.item_type_is_equivalent_to<uint64_t>()) {
+        return make_shared_array<uint64_t>(info, sa);
+    }
+    else if (info.item_type_is_equivalent_to<int8_t>()) {
+        return make_shared_array<int8_t>(info, sa);
+    }
+    else if (info.item_type_is_equivalent_to<int16_t>()) {
+        return make_shared_array<int16_t>(info, sa);
+    }
+    else if (info.item_type_is_equivalent_to<int32_t>()) {
+        return make_shared_array<int32_t>(info, sa);
+    }
+    else if (info.item_type_is_equivalent_to<int64_t>()) {
+        return make_shared_array<int64_t>(info, sa);
+    }
+    else if (info.item_type_is_equivalent_to<float>()) {
+        return make_shared_array<float>(info, sa);
+    }
+    else if (info.item_type_is_equivalent_to<double>()) {
+        return make_shared_array<double>(info, sa);
+    }
+}
+
+py::object cast_to_python_array(const shared_array<const void>& sa) {
+    py::object array_array = py::module_::import("array").attr("array");
+
+    /* return python array with copy of shared_array contents */
+    switch (sa.original_type()) {
+        case ArrayType::Bool:
+        case ArrayType::UInt8:
+            return array_array("B", sa.castTo<const uint8_t>());
+        case ArrayType::UInt16:
+            return array_array("H", sa.castTo<const uint16_t>());
+        case ArrayType::UInt32:
+            return array_array("I", sa.castTo<const uint32_t>());
+        case ArrayType::UInt64:
+            return array_array("Q", sa.castTo<const uint64_t>());
+        case ArrayType::Int8:
+            return array_array("b", sa.castTo<const int8_t>());
+        case ArrayType::Int16:
+            return array_array("h", sa.castTo<const int16_t>());
+        case ArrayType::Int32:
+            return array_array("i", sa.castTo<const int32_t>());
+        case ArrayType::Int64:
+            return array_array("q", sa.castTo<const int64_t>());
+        case ArrayType::Float32:
+            return array_array("f", sa.castTo<const float>());
+        case ArrayType::Float64:
+            return array_array("d", sa.castTo<const double>());
+        //default:
+        //    throw std::runtime_error("Conversion not yet implemented.");
+    }
+}
+
 namespace pybind11 {
 namespace detail {
 
@@ -72,136 +150,16 @@ struct type_caster<shared_array<const void>> {
 
     static handle
     cast(const shared_array<const void>& sa, return_value_policy policy, handle parent) {
-        py::list py_list;
-
-        if (sa.original_type() == ArrayType::UInt8) {
-            for (auto val : sa.castTo<const uint8_t>()) {
-                py_list.append(val);
-            }
-        }
-        else if (sa.original_type() == ArrayType::UInt16) {
-            for (auto val : sa.castTo<const uint16_t>()) {
-                py_list.append(val);
-            }
-        }
-        else if (sa.original_type() == ArrayType::UInt32) {
-            for (auto val : sa.castTo<const uint32_t>()) {
-                py_list.append(val);
-            }
-        }
-        else if (sa.original_type() == ArrayType::UInt64) {
-            for (auto val : sa.castTo<const uint64_t>()) {
-                py_list.append(val);
-            }
-        }
-        else if (sa.original_type() == ArrayType::Int8) {
-            for (auto val : sa.castTo<const int8_t>()) {
-                py_list.append(val);
-            }
-        }
-        else if (sa.original_type() == ArrayType::Int16) {
-            for (auto val : sa.castTo<const int16_t>()) {
-                py_list.append(val);
-            }
-        }
-        else if (sa.original_type() == ArrayType::Int32) {
-            for (auto val : sa.castTo<const int32_t>()) {
-                py_list.append(val);
-            }
-        }
-        else if (sa.original_type() == ArrayType::Int64) {
-            for (auto val : sa.castTo<const int64_t>()) {
-                py_list.append(val);
-            }
-        }
-        else if (sa.original_type() == ArrayType::Float32) {
-            for (auto val : sa.castTo<const float>()) {
-                py_list.append(val);
-            }
-        }
-        else if (sa.original_type() == ArrayType::Float64) {
-            for (auto val : sa.castTo<const double>()) {
-                py_list.append(val);
-            }
-        }
-
-        return py_list.release();
+        // inspect original data type in shared_array and copy-construct new python array
+        return cast_to_python_array(sa).release();
     }
 
     bool load(handle src, bool convert) {
         /* check if py_object is a buffer */
         if (py::isinstance<py::buffer>(src)) {
-            py::buffer_info info = py::reinterpret_borrow<py::buffer>(src).request();
-            /* verify buffer is 1D */
-            if (info.ndim != 1) {
-                return false;
-            }
-            /* check this load() method matches buffer data type */
-            //if (value.original_type() == ArrayType::UInt8) {
-            if (info.item_type_is_equivalent_to<uint8_t>()) {
-                auto arr_begin = static_cast<const uint8_t*>(info.ptr);                               \
-                auto arr_end = static_cast<const uint8_t*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const uint8_t>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            //else if (value.original_type() == ArrayType::UInt16) {
-            else if (info.item_type_is_equivalent_to<uint16_t>()) {
-                auto arr_begin = static_cast<const uint16_t*>(info.ptr);                               \
-                auto arr_end = static_cast<const uint16_t*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const uint16_t>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            //else if (value.original_type() == ArrayType::UInt32) {
-            else if (info.item_type_is_equivalent_to<uint32_t>()) {
-                auto arr_begin = static_cast<const uint32_t*>(info.ptr);                               \
-                auto arr_end = static_cast<const uint32_t*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const uint32_t>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            //else if (value.original_type() == ArrayType::UInt64) {
-            else if (info.item_type_is_equivalent_to<uint64_t>()) {
-                auto arr_begin = static_cast<const uint64_t*>(info.ptr);                               \
-                auto arr_end = static_cast<const uint64_t*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const uint64_t>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            //else if (value.original_type() == ArrayType::Int8) {
-            else if (info.item_type_is_equivalent_to<int8_t>()) {
-                auto arr_begin = static_cast<const int8_t*>(info.ptr);                               \
-                auto arr_end = static_cast<const int8_t*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const int8_t>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            //else if (value.original_type() == ArrayType::Int16) {
-            else if (info.item_type_is_equivalent_to<int16_t>()) {
-                auto arr_begin = static_cast<const int16_t*>(info.ptr);                               \
-                auto arr_end = static_cast<const int16_t*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const int16_t>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            //else if (value.original_type() == ArrayType::Int32) {
-            else if (info.item_type_is_equivalent_to<int32_t>()) {
-                auto arr_begin = static_cast<const int32_t*>(info.ptr);                               \
-                auto arr_end = static_cast<const int32_t*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const int32_t>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            //else if (value.original_type() == ArrayType::Int64) {
-            else if (info.item_type_is_equivalent_to<int64_t>()) {
-                auto arr_begin = static_cast<const int64_t*>(info.ptr);                               \
-                auto arr_end = static_cast<const int64_t*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const int64_t>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            //else if (value.original_type() == ArrayType::Float32) {
-            else if (info.item_type_is_equivalent_to<float>()) {
-                auto arr_begin = static_cast<const float*>(info.ptr);                               \
-                auto arr_end = static_cast<const float*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const float>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            //else if (value.original_type() == ArrayType::Float64) {
-            else if (info.item_type_is_equivalent_to<double>()) {
-                auto arr_begin = static_cast<const double*>(info.ptr);                               \
-                auto arr_end = static_cast<const double*>(arr_begin + info.shape[0]);                \
-                value = shared_array<const double>(arr_begin, arr_end).castTo<const void>();                              \
-            }
-            else {
-                return false;
-            }
-
-            return true;
+            // inspect data type of python array and copy-construct new shared_array
+            py::buffer src_buffer = py::reinterpret_borrow<py::buffer>(src);
+            return load_from_python_array(src_buffer, value);
         }
         /* check if py_object is a sequence */
         else if (py::isinstance<py::sequence>(src)) {
