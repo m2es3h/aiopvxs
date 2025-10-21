@@ -141,24 +141,21 @@ void create_submodule_data(py::module_& m) {
         .def("as_array", static_cast<shared_array<const void> (Value::*)(void) const>(&Value::as<shared_array<const void>>))
 
         .def("as_list", [](const Value& self){
-            auto py_array = cast_to_python_array(self.as<shared_array<const void>>());
-            return py_array.attr("tolist")();
+            return py::cast(self.as<shared_array<const void>>()).attr("tolist")();
         })
 
         .def("as_int_list", [](const Value& self){
             py::object array_array = py::module_::import("array").attr("array");
-            py::object py_array = array_array("q", self.as<shared_array<const int64_t>>());
-            return py_array.attr("tolist")();
+            return array_array("q", self.as<shared_array<const void>>()).attr("tolist")();
         })
         .def("as_float_list", [](const Value& self){
             py::object array_array = py::module_::import("array").attr("array");
-            py::object py_array = array_array("d", self.as<shared_array<const double>>());
-            return py_array.attr("tolist")();
-        })/*
+            return array_array("d", self.as<shared_array<const void>>()).attr("tolist")();
+        })
         .def("as_string_list", [](const Value& self){
-            auto py_array = cast_to_python_array(self.as<shared_array<const std::string>>());
-            return py_array.attr("tolist")();
-        })*/
+            py::object array_array = py::module_::import("array").attr("array");
+            return array_array("u", self.as<shared_array<const void>>()).attr("tolist")();
+        })
 
         .def("as_float", static_cast<double (Value::*)(void) const>(&Value::as<double>))
         .def("__float__",  static_cast<double (Value::*)(void) const>(&Value::as<double>))

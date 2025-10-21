@@ -115,6 +115,7 @@ class TestScalar:
         nt_value['value'] = array.array(pyarray_type, py_value)
         assert isinstance(nt_value.value, Value)
         assert nt_value.value.as_list() == py_value
+        assert nt_value.value.as_int_list() == py_value
         assert nt_value.value.as_float_list() == [float(x) for x in py_value]
 
     @pytest.mark.parametrize('nt_float_arrays', [
@@ -133,7 +134,11 @@ class TestScalar:
         if pyarray_type == 'f':
             rounded_nt_vals = [round(v, 8) for v in nt_value.value.as_list()]
             assert rounded_nt_vals == py_value
+            rounded_nt_vals = [round(v, 8) for v in nt_value.value.as_float_list()]
+            assert rounded_nt_vals == py_value
         else:
             assert nt_value.value.as_list() == py_value
+            assert nt_value.value.as_float_list() == py_value
 
-        assert nt_value.value.as_int_list() == [int(x) for x in py_value]
+        with pytest.raises(TypeError, match="'float' object cannot be interpreted as an integer"):
+            assert nt_value.value.as_int_list() == [int(x) for x in py_value]

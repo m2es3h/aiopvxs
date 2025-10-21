@@ -14,6 +14,20 @@ bool make_shared_array(const py::buffer_info& info, shared_array<const void>& sa
     return true;
 }
 
+template <typename T>
+py::object make_python_array(const shared_array<const void>& sa) {
+    py::object array_array = py::module_::import("array").attr("array");
+    auto mv = py::memoryview::from_buffer(
+        sa.data(),
+        sizeof(T),
+        py::format_descriptor<T>::value,
+        {sa.size()},
+        {sizeof(T)}
+    );
+
+    return array_array(py::format_descriptor<T>::format(), mv);
+}
+
 bool load_from_python_array(const py::buffer src, shared_array<const void>& sa) {
     py::buffer_info info = src.request();
 
@@ -51,6 +65,9 @@ bool load_from_python_array(const py::buffer src, shared_array<const void>& sa) 
     else if (info.item_type_is_equivalent_to<double>()) {
         return make_shared_array<double>(info, sa);
     }
+    else {
+        throw std::runtime_error("Conversion not yet implemented.");
+    }
 }
 
 py::object cast_to_python_array(const shared_array<const void>& sa) {
@@ -60,27 +77,27 @@ py::object cast_to_python_array(const shared_array<const void>& sa) {
     switch (sa.original_type()) {
         case ArrayType::Bool:
         case ArrayType::UInt8:
-            return array_array("B", sa.castTo<const uint8_t>());
+            return make_python_array<uint8_t>(sa);
         case ArrayType::UInt16:
-            return array_array("H", sa.castTo<const uint16_t>());
+            return make_python_array<uint16_t>(sa);
         case ArrayType::UInt32:
-            return array_array("I", sa.castTo<const uint32_t>());
+            return make_python_array<uint32_t>(sa);
         case ArrayType::UInt64:
-            return array_array("Q", sa.castTo<const uint64_t>());
+            return make_python_array<uint64_t>(sa);
         case ArrayType::Int8:
-            return array_array("b", sa.castTo<const int8_t>());
+            return make_python_array<int8_t>(sa);
         case ArrayType::Int16:
-            return array_array("h", sa.castTo<const int16_t>());
+            return make_python_array<int16_t>(sa);
         case ArrayType::Int32:
-            return array_array("i", sa.castTo<const int32_t>());
+            return make_python_array<int32_t>(sa);
         case ArrayType::Int64:
-            return array_array("q", sa.castTo<const int64_t>());
+            return make_python_array<int64_t>(sa);
         case ArrayType::Float32:
-            return array_array("f", sa.castTo<const float>());
+            return make_python_array<float>(sa);
         case ArrayType::Float64:
-            return array_array("d", sa.castTo<const double>());
-        //default:
-        //    throw std::runtime_error("Conversion not yet implemented.");
+            return make_python_array<double>(sa);
+        default:
+            throw std::runtime_error("Cast not yet implemented.");
     }
 }
 
@@ -93,13 +110,18 @@ struct type_caster<shared_array<const T>> {                                     
     PYBIND11_TYPE_CASTER(shared_array<const T>, io_name(py_hint, "aiopvxs.data.Value"));    \
                                                                                             \
     static handle                                                                           \
-    cast(const shared_array<const T>& arr, return_value_policy policy, handle parent) {     \
-        /* build a python list from shared_array<T> elements */                             \
-        py::list py_list;                                                                   \
-        for (auto val : arr) {                                                              \
-            py_list.append(val);                                                            \
-        }                                                                                   \
-        return py_list.release();                                                           \
+    cast(const shared_array<const T>& sa, return_value_policy policy, handle parent) {      \
+        /* copy-construct a python array from shared_array<T> elements */                   \
+        py::object array_array = py::module_::import("array").attr("array");                \
+        auto mv = py::memoryview::from_buffer(                                              \
+            sa.data(),                                                                      \
+            sizeof(T),                                                                      \
+            py::format_descriptor<T>::value,                                                \
+            {sa.size()},                                                                    \
+            {sizeof(T)}                                                                     \
+        );                                                                                  \
+                                                                                            \
+        return array_array(py::format_descriptor<T>::format(), mv);                         \
     }                                                                                       \
                                                                                             \
     bool load(handle src, bool convert) {                                                   \
@@ -131,7 +153,7 @@ struct type_caster<shared_array<const T>> {                                     
     }                                                                                       \
 };
 
-SHARED_ARRAY_TYPE_CASTER(int8_t, "collections.abc.Buffer");
+/*SHARED_ARRAY_TYPE_CASTER(int8_t, "collections.abc.Buffer");
 SHARED_ARRAY_TYPE_CASTER(int16_t, "collections.abc.Buffer");
 SHARED_ARRAY_TYPE_CASTER(int32_t, "collections.abc.Buffer");
 SHARED_ARRAY_TYPE_CASTER(int64_t, "collections.abc.Buffer");
@@ -141,7 +163,7 @@ SHARED_ARRAY_TYPE_CASTER(uint32_t, "collections.abc.Buffer");
 SHARED_ARRAY_TYPE_CASTER(uint64_t, "collections.abc.Buffer");
 
 SHARED_ARRAY_TYPE_CASTER(float, "collections.abc.Buffer");
-SHARED_ARRAY_TYPE_CASTER(double, "collections.abc.Buffer");
+SHARED_ARRAY_TYPE_CASTER(double, "collections.abc.Buffer");*/
 
 
 template <>
@@ -155,15 +177,15 @@ struct type_caster<shared_array<const void>> {
     }
 
     bool load(handle src, bool convert) {
-        /* check if py_object is a buffer */
+        // check if py_object is a buffer
         if (py::isinstance<py::buffer>(src)) {
             // inspect data type of python array and copy-construct new shared_array
             py::buffer src_buffer = py::reinterpret_borrow<py::buffer>(src);
             return load_from_python_array(src_buffer, value);
         }
-        /* check if py_object is a sequence */
+        // check if py_object is a sequence
         else if (py::isinstance<py::sequence>(src)) {
-            /* sequences not yet supported */
+            // sequences not yet supported
             return false;
         }
         else {
