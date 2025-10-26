@@ -168,7 +168,7 @@ SHARED_ARRAY_TYPE_CASTER(double, "collections.abc.Buffer");*/
 
 template <>
 struct type_caster<shared_array<const void>> {
-    PYBIND11_TYPE_CASTER(shared_array<const void>, io_name("collections.abc.Buffer", "aiopvxs.data.Value"));
+    PYBIND11_TYPE_CASTER(shared_array<const void>, io_name("collections.abc.Buffer | collections.abc.Sequence", "aiopvxs.data.Value"));
 
     static handle
     cast(const shared_array<const void>& sa, return_value_policy policy, handle parent) {
@@ -185,8 +185,33 @@ struct type_caster<shared_array<const void>> {
         }
         // check if py_object is a sequence
         else if (py::isinstance<py::sequence>(src)) {
-            // sequences not yet supported
-            return false;
+            // cast sequence to equivalent std::vector type and copy-construct new shared_array
+            py::sequence seq = py::reinterpret_borrow<py::sequence>(src);
+            if (py::isinstance<py::int_>(seq[0])) {
+                try {
+                    auto seq_as_vector = seq.cast<std::vector<int64_t>>();
+                    shared_array<const int64_t> new_value(seq_as_vector.begin(), seq_as_vector.end());
+                    value = new_value.castTo<const void>();
+                    return true;
+                }
+                catch (...) {
+                    return false;
+                }
+            }
+            else if (py::isinstance<py::float_>(seq[0])) {
+                try {
+                    auto seq_as_vector = seq.cast<std::vector<double>>();
+                    shared_array<const double> new_value(seq_as_vector.begin(), seq_as_vector.end());
+                    value = new_value.castTo<const void>();
+                    return true;
+                }
+                catch (...) {
+                    return false;
+                }
+            }
+            else {
+                return false;
+            }
         }
         else {
             return false;

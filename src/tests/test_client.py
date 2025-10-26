@@ -1,17 +1,17 @@
 import logging
-
-from asyncio import create_task, sleep, gather, current_task, all_tasks
+from asyncio import (CancelledError, all_tasks, create_task, current_task,
+                     gather, sleep, wait_for)
 from typing import AsyncGenerator
+
 import pytest
 import pytest_asyncio
 from pytest import FixtureRequest
-from aiopvxs.data import TypeCodeEnum as T, Value
-from aiopvxs.nt import NTScalar
 
 from aiopvxs.client import Context
-from aiopvxs.server import Server
+from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.data import Value
-from asyncio import wait_for, CancelledError
+from aiopvxs.nt import NTScalar
+from aiopvxs.server import Server
 
 _log = logging.getLogger(__file__)
 
@@ -22,24 +22,28 @@ class TestClient:
     #@pytest.mark.parametrize('server_pvs', [
     #    {"scalar_int32": NTScalar(T.Int32).create()}
     #])
-    async def test_get_integers(self, pvxs_test_server : AsyncGenerator[Server],
-                       pvxs_test_context : AsyncGenerator[Context]):
+    async def test_get_integers(self, pvxs_test_server : Server,
+                       pvxs_test_context : Context):
+        server = pvxs_test_server
         client = pvxs_test_context
+
         get_op =  client.get("scalar_int32")
         val = await get_op
         assert isinstance(val, Value)
         assert int(val.value) == -42
     
-    async def test_get_cancel(self, pvxs_test_context : AsyncGenerator[Context]):
+    async def test_get_cancel(self, pvxs_test_context : Context):
         client = pvxs_test_context
+
         get_op = client.get("nonexistent")
         get_op.cancel()
 
         with pytest.raises(CancelledError) as exc_info:
             val = await get_op
 
-    async def test_get_await(self, pvxs_test_server : AsyncGenerator[Server],
-                       pvxs_test_context : AsyncGenerator[Context]):
+    async def test_get_await(self, pvxs_test_server : Server,
+                       pvxs_test_context : Context):
+        server = pvxs_test_server
         client = pvxs_test_context
 
         async def other_work(i):
