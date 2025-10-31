@@ -37,6 +37,7 @@ void create_submodule_data(py::module_& m) {
         .value("Float64", TypeCode::code_t::Float64)
         .value("Float64A", TypeCode::code_t::Float64A)
         .value("String", TypeCode::code_t::String)
+        .value("StringA", TypeCode::code_t::StringA)
         .value("Struct", TypeCode::code_t::Struct)
         //.export_values()
         .finalize();
@@ -98,6 +99,13 @@ void create_submodule_data(py::module_& m) {
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>))
+        .def("__setattr__", [](const Value& self, const std::string& name, py::dict values_dict) {
+            for (auto item : values_dict) {
+                const std::string key = item.first.cast<std::string>();
+                const py::object& py_value = py::reinterpret_borrow<py::object>(item.second);
+                py::cast(self).attr("__setitem__")(key, py_value);
+            }
+        })
         /*
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint8_t>&)>(&Value::update<const shared_array<const uint8_t>&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint16_t>&)>(&Value::update<const shared_array<const uint16_t>&, std::string&>))
@@ -115,6 +123,13 @@ void create_submodule_data(py::module_& m) {
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>))
+        .def("__setitem__", [](const Value& self, const std::string& name, py::dict values_dict) {
+            for (auto item : values_dict) {
+                const std::string key = item.first.cast<std::string>();
+                const py::object& py_value = py::reinterpret_borrow<py::object>(item.second);
+                py::cast(self).attr("__setitem__")(key, py_value);
+            }
+        })
         /*
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint8_t>&)>(&Value::update<const shared_array<const uint8_t>&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint16_t>&)>(&Value::update<const shared_array<const uint16_t>&, std::string&>))
@@ -141,7 +156,11 @@ void create_submodule_data(py::module_& m) {
         .def("as_array", static_cast<shared_array<const void> (Value::*)(void) const>(&Value::as<shared_array<const void>>))
 
         .def("as_list", [](const Value& self){
-            return py::cast(self.as<shared_array<const void>>()).attr("tolist")();
+            auto sa = self.as<shared_array<const void>>();
+            if (sa.original_type() == ArrayType::String)
+                return py::cast(sa);
+            else
+                return py::cast(sa).attr("tolist")();
         })
 
         .def("as_int_list", [](const Value& self){
@@ -153,8 +172,14 @@ void create_submodule_data(py::module_& m) {
             return array_array("d", self.as<shared_array<const void>>()).attr("tolist")();
         })
         .def("as_string_list", [](const Value& self){
-            py::object array_array = py::module_::import("array").attr("array");
-            return array_array("u", self.as<shared_array<const void>>()).attr("tolist")();
+            auto sa = self.as<shared_array<const void>>();
+            if (sa.original_type() == ArrayType::String) {
+                return py::cast(sa);
+            }
+            else {
+                py::object array_array = py::module_::import("array").attr("array");
+                return array_array("u", self.as<shared_array<const void>>()).attr("tolist")();
+            }
         })
 
         .def("as_float", static_cast<double (Value::*)(void) const>(&Value::as<double>))

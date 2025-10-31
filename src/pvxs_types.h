@@ -28,46 +28,47 @@ py::object make_python_array(const shared_array<const void>& sa) {
     return array_array(py::format_descriptor<T>::format(), mv);
 }
 
+template <typename T>
+bool load_from_python_seq(const py::sequence src, shared_array<const void>& sa) {
+    try {
+        auto seq_as_vector = src.cast<std::vector<T>>();
+        shared_array<const T> new_value(seq_as_vector.begin(), seq_as_vector.end());
+        sa = new_value.template castTo<const void>();
+        return true;
+    }
+    catch (const std::exception& e) {
+        return false;
+    }
+}
+
 bool load_from_python_array(const py::buffer src, shared_array<const void>& sa) {
     py::buffer_info info = src.request();
 
     // veify buffer is 1D
-    if (info.ndim != 1) {
+    if (info.ndim != 1)
         return false;
-    }
-    else if (info.item_type_is_equivalent_to<uint8_t>()) {
+    else if (info.item_type_is_equivalent_to<uint8_t>())
         return make_shared_array<uint8_t>(info, sa);
-    }
-    else if (info.item_type_is_equivalent_to<uint16_t>()) {
+    else if (info.item_type_is_equivalent_to<uint16_t>())
         return make_shared_array<uint16_t>(info, sa);
-    }
-    else if (info.item_type_is_equivalent_to<uint32_t>()) {
+    else if (info.item_type_is_equivalent_to<uint32_t>())
         return make_shared_array<uint32_t>(info, sa);
-    }
-    else if (info.item_type_is_equivalent_to<uint64_t>()) {
+    else if (info.item_type_is_equivalent_to<uint64_t>())
         return make_shared_array<uint64_t>(info, sa);
-    }
-    else if (info.item_type_is_equivalent_to<int8_t>()) {
+    else if (info.item_type_is_equivalent_to<int8_t>())
         return make_shared_array<int8_t>(info, sa);
-    }
-    else if (info.item_type_is_equivalent_to<int16_t>()) {
+    else if (info.item_type_is_equivalent_to<int16_t>())
         return make_shared_array<int16_t>(info, sa);
-    }
-    else if (info.item_type_is_equivalent_to<int32_t>()) {
+    else if (info.item_type_is_equivalent_to<int32_t>())
         return make_shared_array<int32_t>(info, sa);
-    }
-    else if (info.item_type_is_equivalent_to<int64_t>()) {
+    else if (info.item_type_is_equivalent_to<int64_t>())
         return make_shared_array<int64_t>(info, sa);
-    }
-    else if (info.item_type_is_equivalent_to<float>()) {
+    else if (info.item_type_is_equivalent_to<float>())
         return make_shared_array<float>(info, sa);
-    }
-    else if (info.item_type_is_equivalent_to<double>()) {
+    else if (info.item_type_is_equivalent_to<double>())
         return make_shared_array<double>(info, sa);
-    }
-    else {
+    else
         throw std::runtime_error("Conversion not yet implemented.");
-    }
 }
 
 py::object cast_to_python_array(const shared_array<const void>& sa) {
@@ -172,8 +173,17 @@ struct type_caster<shared_array<const void>> {
 
     static handle
     cast(const shared_array<const void>& sa, return_value_policy policy, handle parent) {
+        // return a list of strings if shared_array<std::string> type
+        if (sa.original_type() == ArrayType::String) {
+            py::list py_str_list;
+            for (auto& item : sa.castTo<const std::string>())
+                py_str_list.append(item);
+            return py_str_list.release();
+        }
         // inspect original data type in shared_array and copy-construct new python array
-        return cast_to_python_array(sa).release();
+        else {
+            return cast_to_python_array(sa).release();
+        }
     }
 
     bool load(handle src, bool convert) {
@@ -187,31 +197,14 @@ struct type_caster<shared_array<const void>> {
         else if (py::isinstance<py::sequence>(src)) {
             // cast sequence to equivalent std::vector type and copy-construct new shared_array
             py::sequence seq = py::reinterpret_borrow<py::sequence>(src);
-            if (py::isinstance<py::int_>(seq[0])) {
-                try {
-                    auto seq_as_vector = seq.cast<std::vector<int64_t>>();
-                    shared_array<const int64_t> new_value(seq_as_vector.begin(), seq_as_vector.end());
-                    value = new_value.castTo<const void>();
-                    return true;
-                }
-                catch (...) {
-                    return false;
-                }
-            }
-            else if (py::isinstance<py::float_>(seq[0])) {
-                try {
-                    auto seq_as_vector = seq.cast<std::vector<double>>();
-                    shared_array<const double> new_value(seq_as_vector.begin(), seq_as_vector.end());
-                    value = new_value.castTo<const void>();
-                    return true;
-                }
-                catch (...) {
-                    return false;
-                }
-            }
-            else {
+            if (py::isinstance<py::int_>(seq[0]))
+                return load_from_python_seq<int64_t>(seq, value);
+            else if (py::isinstance<py::float_>(seq[0]))
+                return load_from_python_seq<double>(seq, value);
+            else if (py::isinstance<py::str>(seq[0]))
+                return load_from_python_seq<std::string>(seq, value);
+            else
                 return false;
-            }
         }
         else {
             return false;

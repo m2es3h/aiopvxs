@@ -36,6 +36,13 @@ class TestScalar:
         else:
             assert str(nt_value.value) == str(py_value)
 
+    def test_wrap_string_type(self):
+        test_string = "Hello, 👋"
+
+        nt_value = NTScalar(T.String).create()
+        nt_value['value'] = test_string
+        assert str(nt_value.value) == test_string
+
     @pytest.mark.parametrize('nt_boolean_scalars', [
         (NTScalar(T.Bool), False),
         (NTScalar(T.Bool), True),
@@ -53,9 +60,9 @@ class TestScalar:
         # pvxs returns "true/false" all lowercase
         assert str(nt_value.value) == str(py_value).lower()
 
-    @pytest.mark.skip
+    #@pytest.mark.skip
     @pytest.mark.parametrize('nt_enum', [
-        (NTEnum(), {'index': 2, 'choices': ['zero', 'one', 'two', 'three']}),
+        (NTEnum(), {'value.index': 2, 'value.choices': ['zero', 'one', 'two', 'three']}),
         #(NTEnum(), 2),
         #(NTEnum(), 'two'),
     ], ids=[
@@ -68,8 +75,8 @@ class TestScalar:
 
         nt_value = nt_type.create()
         nt_value['value'] = py_value
-        assert nt_value.value.index == py_value['index']
-        assert nt_value.value.choices == py_value['choices']
+        assert nt_value.value.index.as_int() == py_value['value.index']
+        assert nt_value.value.choices.as_string_list() == py_value['value.choices']
 
     def test_wrap_array_of_ints(self, nt_integer_arrays : tuple):
         nt_type, pyarray_type, py_value = nt_integer_arrays
@@ -126,3 +133,12 @@ class TestScalar:
 
         with pytest.raises(TypeError, match="'float' object cannot be interpreted as an integer"):
             assert nt_value.value.as_int_list() == [int(x) for x in py_value]
+
+    def test_wrap_sequence_of_strings(self):
+        test_strings = ["Hello, 👋", "from", "the", "python", "side"]
+
+        nt_value = NTScalar(T.StringA).create()
+        nt_value['value'] = test_strings
+        print(repr(nt_value['value']))
+        assert nt_value.value.as_list() == test_strings
+        assert nt_value.value.as_string_list() == test_strings
