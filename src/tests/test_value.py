@@ -62,7 +62,7 @@ class TestScalar:
 
     #@pytest.mark.skip
     @pytest.mark.parametrize('nt_enum', [
-        (NTEnum(), {'value.index': 2, 'value.choices': ['zero', 'one', 'two', 'three']}),
+        (NTEnum(), {'index': 2, 'choices': ['zero', 'one', 'two', 'three']}),
         #(NTEnum(), 2),
         #(NTEnum(), 'two'),
     ], ids=[
@@ -75,8 +75,8 @@ class TestScalar:
 
         nt_value = nt_type.create()
         nt_value['value'] = py_value
-        assert nt_value.value.index.as_int() == py_value['value.index']
-        assert nt_value.value.choices.as_string_list() == py_value['value.choices']
+        assert nt_value.value.index.as_int() == py_value['index']
+        assert nt_value.value.choices.as_string_list() == py_value['choices']
 
     def test_wrap_array_of_ints(self, nt_integer_arrays : tuple):
         nt_type, pyarray_type, py_value = nt_integer_arrays
@@ -139,6 +139,25 @@ class TestScalar:
 
         nt_value = NTScalar(T.StringA).create()
         nt_value['value'] = test_strings
-        print(repr(nt_value['value']))
         assert nt_value.value.as_list() == test_strings
         assert nt_value.value.as_string_list() == test_strings
+
+    def test_wrap_dictionary(self):
+        nt_value = NTEnum().create()
+        nt_value.assign({
+            'value': {
+                'index': 1,
+                'choices': ['OFF', 'ON'],
+            },
+            'display.description': "sample description",
+            'timeStamp': {
+                'secondsPastEpoch': 167555999,
+                'nanoseconds': 500,
+            }
+        })
+
+        assert nt_value.value.index.as_int() == 1
+        assert nt_value.value.choices.as_list() == ['OFF', 'ON']
+        assert nt_value.display.description.as_string() == "sample description"
+        assert nt_value['timeStamp.secondsPastEpoch'].as_int() == 167555999
+        assert nt_value['timeStamp.nanoseconds'].as_int() == 500

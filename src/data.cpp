@@ -95,16 +95,29 @@ void create_submodule_data(py::module_& m) {
             return self.lookup(name);
         })
 
+        .def("assign", &Value::assign)
+        .def("assign", [](const Value& self, py::dict values_dict) {
+            for (auto item : values_dict) {
+                const std::string key = item.first.cast<std::string>();
+                const py::object& py_value = py::reinterpret_borrow<py::object>(item.second);
+                try {
+                    py::cast(self).attr("__setattr__")(key, py_value);
+                }
+                catch (const std::exception& e) {
+                    auto py_typename = py::str(py_value.attr("__class__").attr("__name__"));
+                    std::stringstream ss;
+                    ss << "Cannot assign " << py_typename << " to '" << key << "'" << " field";
+                    throw py::value_error(ss.str());
+                }
+            }
+        })
+
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>))
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>))
-        .def("__setattr__", [](const Value& self, const std::string& name, py::dict values_dict) {
-            for (auto item : values_dict) {
-                const std::string key = item.first.cast<std::string>();
-                const py::object& py_value = py::reinterpret_borrow<py::object>(item.second);
-                py::cast(self).attr("__setitem__")(key, py_value);
-            }
+        .def("__setattr__", [](const Value& self, std::string& name, py::dict values_dict) {
+            py::cast(self.lookup(name)).attr("assign")(values_dict);
         })
         /*
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint8_t>&)>(&Value::update<const shared_array<const uint8_t>&, std::string&>))
@@ -123,12 +136,8 @@ void create_submodule_data(py::module_& m) {
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>))
-        .def("__setitem__", [](const Value& self, const std::string& name, py::dict values_dict) {
-            for (auto item : values_dict) {
-                const std::string key = item.first.cast<std::string>();
-                const py::object& py_value = py::reinterpret_borrow<py::object>(item.second);
-                py::cast(self).attr("__setitem__")(key, py_value);
-            }
+        .def("__setitem__", [](const Value& self, std::string& name, py::dict values_dict) {
+            py::cast(self.lookup(name)).attr("assign")(values_dict);
         })
         /*
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint8_t>&)>(&Value::update<const shared_array<const uint8_t>&, std::string&>))
