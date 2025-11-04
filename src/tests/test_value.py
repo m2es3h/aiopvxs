@@ -11,9 +11,9 @@ from aiopvxs.nt import NTEnum, NTScalar
 _log = logging.getLogger(__file__)
 
 
-class TestScalar:
+class TestValueCasts:
 
-    def test_wrap_integer_types(self, nt_integer_scalars : tuple):
+    def test_integer_types(self, nt_integer_scalars : tuple):
         nt_type, _, py_value = nt_integer_scalars
 
         nt_value = nt_type.create()
@@ -22,7 +22,7 @@ class TestScalar:
         assert int(nt_value.value) == int(py_value)
         assert float(nt_value.value) == pytest.approx(float(py_value))
 
-    def test_wrap_float_types(self, nt_float_scalars : tuple):
+    def test_float_types(self, nt_float_scalars : tuple):
         nt_type, _, py_value = nt_float_scalars
 
         nt_value = nt_type.create()
@@ -36,7 +36,7 @@ class TestScalar:
         else:
             assert str(nt_value.value) == str(py_value)
 
-    def test_wrap_string_type(self):
+    def test_string_type(self):
         test_string = "Hello, 👋"
 
         nt_value = NTScalar(T.String).create()
@@ -50,7 +50,7 @@ class TestScalar:
         'False',
         'True',
     ], indirect=False)
-    def test_wrap_boolean_types(self, nt_boolean_scalars : tuple):
+    def test_boolean_types(self, nt_boolean_scalars : tuple):
         nt_type, py_value = nt_boolean_scalars
 
         nt_value = nt_type.create()
@@ -70,7 +70,7 @@ class TestScalar:
         #'index',
         #'label',
     ], indirect=False)
-    def test_wrap_enum_type(self, nt_enum : tuple):
+    def test_enum_type(self, nt_enum : tuple):
         nt_type, py_value = nt_enum
 
         nt_value = nt_type.create()
@@ -78,7 +78,7 @@ class TestScalar:
         assert nt_value.value.index.as_int() == py_value['index']
         assert nt_value.value.choices.as_string_list() == py_value['choices']
 
-    def test_wrap_array_of_ints(self, nt_integer_arrays : tuple):
+    def test_array_of_ints(self, nt_integer_arrays : tuple):
         nt_type, pyarray_type, py_value = nt_integer_arrays
 
         nt_value = nt_type.create()
@@ -88,7 +88,7 @@ class TestScalar:
         assert nt_value.value.as_int_list() == py_value
         assert nt_value.value.as_float_list() == [float(x) for x in py_value]
 
-    def test_wrap_sequence_of_ints(self, nt_integer_arrays : tuple):
+    def test_sequence_of_ints(self, nt_integer_arrays : tuple):
         nt_type, _, py_value = nt_integer_arrays
 
         nt_value = nt_type.create()
@@ -98,7 +98,7 @@ class TestScalar:
         assert nt_value.value.as_int_list() == py_value
         assert nt_value.value.as_float_list() == [float(x) for x in py_value]
 
-    def test_wrap_array_of_floats(self, nt_float_arrays : tuple):
+    def test_array_of_floats(self, nt_float_arrays : tuple):
         nt_type, pyarray_type, py_value = nt_float_arrays
 
         nt_value = nt_type.create()
@@ -116,7 +116,7 @@ class TestScalar:
         with pytest.raises(TypeError, match="'float' object cannot be interpreted as an integer"):
             assert nt_value.value.as_int_list() == [int(x) for x in py_value]
 
-    def test_wrap_sequence_of_floats(self, nt_float_arrays : tuple):
+    def test_sequence_of_floats(self, nt_float_arrays : tuple):
         nt_type, pyarray_type, py_value = nt_float_arrays
 
         nt_value = nt_type.create()
@@ -134,7 +134,7 @@ class TestScalar:
         with pytest.raises(TypeError, match="'float' object cannot be interpreted as an integer"):
             assert nt_value.value.as_int_list() == [int(x) for x in py_value]
 
-    def test_wrap_sequence_of_strings(self):
+    def test_sequence_of_strings(self):
         test_strings = ["Hello, 👋", "from", "the", "python", "side"]
 
         nt_value = NTScalar(T.StringA).create()
@@ -142,22 +142,36 @@ class TestScalar:
         assert nt_value.value.as_list() == test_strings
         assert nt_value.value.as_string_list() == test_strings
 
-    def test_wrap_dictionary(self):
-        nt_value = NTEnum().create()
-        nt_value.assign({
+    def test_dictionary(self):
+        test_dict = {
             'value': {
                 'index': 1,
                 'choices': ['OFF', 'ON'],
             },
-            'display.description': "sample description",
+            'display': {
+                'description': "sample description",
+            },
             'timeStamp': {
                 'secondsPastEpoch': 167555999,
                 'nanoseconds': 500,
             }
-        })
+        }
 
-        assert nt_value.value.index.as_int() == 1
-        assert nt_value.value.choices.as_list() == ['OFF', 'ON']
-        assert nt_value.display.description.as_string() == "sample description"
-        assert nt_value['timeStamp.secondsPastEpoch'].as_int() == 167555999
-        assert nt_value['timeStamp.nanoseconds'].as_int() == 500
+        nt_value = NTEnum().create()
+        nt_value.assign(test_dict)
+
+        assert nt_value.value.as_dict().items() >= test_dict['value'].items()
+        assert nt_value.display.as_dict().items() >= test_dict['display'].items()
+        assert nt_value.timeStamp.as_dict().items() >= test_dict['timeStamp'].items()
+
+
+class TestValueOps:
+
+    def test_get_field(self):
+        test_string = "Hello, 👋"
+
+        nt_value = NTScalar(T.String).create()
+        nt_value['value'] = test_string
+        assert str(nt_value.get('value')) == test_string
+        assert nt_value.get('nonexistant') == None
+        assert nt_value.get('nonexistant', {}) == {}

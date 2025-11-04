@@ -88,12 +88,8 @@ void create_submodule_data(py::module_& m) {
             return py::make_iterator(self.ichildren().begin(), self.ichildren().end());
         }, py::keep_alive<0, 1>())
 
-        .def("__getattr__", [](const Value& self, const std::string& name) {
-            return self.lookup(name);
-        })
-        .def("__getitem__", [](const Value& self, const std::string& name) {
-            return self.lookup(name);
-        })
+        .def("__getattr__", static_cast<Value (Value::*)(const std::string&)>(&Value::lookup))
+        .def("__getitem__", static_cast<Value (Value::*)(const std::string&)>(&Value::lookup))
 
         .def("assign", &Value::assign)
         .def("assign", [](const Value& self, py::dict values_dict) {
@@ -152,15 +148,20 @@ void create_submodule_data(py::module_& m) {
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const double>&)>(&Value::update<const shared_array<const double>&, std::string&>))
         */
 
-        .def("get", [](const Value& self, const std::string& name) {
-            return self.lookup(name);
-        })
+        .def("get", [](const Value& self, const std::string& name, py::object def_value) {
+            try {
+                return py::cast(self.lookup(name));
+            }
+            catch (const std::exception& e) {
+                return def_value;
+            }
+        }, py::arg("name"), py::arg("def_value") = py::none())
 
         .def("as_bool", static_cast<bool (Value::*)(void) const>(&Value::as<bool>))
         .def("__bool__",  static_cast<bool (Value::*)(void) const>(&Value::as<bool>))
 
         .def("as_int", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>))
-        .def("__int__",  static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>))
+        .def("__int__", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>))
 
         .def("as_array", static_cast<shared_array<const void> (Value::*)(void) const>(&Value::as<shared_array<const void>>))
 
@@ -170,6 +171,39 @@ void create_submodule_data(py::module_& m) {
                 return py::cast(sa);
             else
                 return py::cast(sa).attr("tolist")();
+        })
+
+        .def("as_dict", [](const Value& self){
+            py::dict py_dict;
+            for (auto item : self.ichildren()) {
+                auto key = py::str(self.nameOf(item));
+                if (item.nmembers() > 0) {
+                    py_dict[key] = py::cast(item).attr("as_dict")();
+                }
+                else {
+                    switch(item.storageType()) {
+                        case StoreType::Bool:
+                            py_dict[key] = py::cast(item.as<bool>());
+                            break;
+                        case StoreType::UInteger:
+                        case StoreType::Integer:
+                            py_dict[key] = py::cast(item.as<int64_t>());
+                            break;
+                        case StoreType::Real:
+                            py_dict[key] = py::cast(item.as<double>());
+                            break;
+                        case StoreType::String:
+                            py_dict[key] = py::cast(item.as<std::string>());
+                            break;
+                        case StoreType::Array:
+                            py_dict[key] = py::cast(item).attr("as_list")();
+                            break;
+                        default:
+                            py_dict[key] = py::cast(item);
+                    }
+                }
+            }
+            return py_dict;
         })
 
         .def("as_int_list", [](const Value& self){
