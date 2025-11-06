@@ -76,3 +76,23 @@ def nt_integer_arrays(request : pytest.FixtureRequest):
 ])
 def nt_float_arrays(request : pytest.FixtureRequest):
     return request.param
+
+@pytest.fixture(scope="module", params=[
+    {
+        'value': {
+            'index': 1,
+            'choices': ['OFF', 'ON'],
+        },
+        'display': {
+            'description': "sample description",
+        },
+        'timeStamp': {
+            'secondsPastEpoch': 167555999,
+            'nanoseconds': 500,
+        }
+    }
+], ids=[
+    'dict'
+])
+def nt_enum_init_dict(request : pytest.FixtureRequest):
+    return request.param

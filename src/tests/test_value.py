@@ -142,21 +142,8 @@ class TestValueCasts:
         assert nt_value.value.as_list() == test_strings
         assert nt_value.value.as_string_list() == test_strings
 
-    def test_dictionary(self):
-        test_dict = {
-            'value': {
-                'index': 1,
-                'choices': ['OFF', 'ON'],
-            },
-            'display': {
-                'description': "sample description",
-            },
-            'timeStamp': {
-                'secondsPastEpoch': 167555999,
-                'nanoseconds': 500,
-            }
-        }
-
+    def test_dictionary(self, nt_enum_init_dict):
+        test_dict = nt_enum_init_dict
         nt_value = NTEnum().create()
         nt_value.assign(test_dict)
 
@@ -175,3 +162,13 @@ class TestValueOps:
         assert str(nt_value.get('value')) == test_string
         assert nt_value.get('nonexistant') == None
         assert nt_value.get('nonexistant', {}) == {}
+
+    def test_value_iteration(self, nt_enum_init_dict):
+        test_dict = nt_enum_init_dict
+        nt_value = NTEnum().create()
+        nt_value.assign(test_dict)
+
+        for item in nt_value:
+            assert isinstance(item, Value)
+            for inner_item in item:
+                assert isinstance(inner_item, Value)
