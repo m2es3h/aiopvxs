@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include <pybind11/pybind11.h>
 #include <pybind11/native_enum.h>
 #include <pybind11/stl.h>
@@ -39,6 +37,7 @@ void create_submodule_data(py::module_& m) {
         .value("String", TypeCode::code_t::String)
         .value("StringA", TypeCode::code_t::StringA)
         .value("Struct", TypeCode::code_t::Struct)
+        .value("Null", TypeCode::code_t::Null)
         //.export_values()
         .finalize();
 
@@ -83,6 +82,8 @@ void create_submodule_data(py::module_& m) {
         .def("type", &Value::type)
         .def("storageType", &Value::storageType)
         .def("id", &Value::id)
+
+        .def("cloneEmpty", &Value::cloneEmpty)
 
         .def("__iter__", [](const Value& self) {
             return py::make_iterator(self.ichildren().begin(), self.ichildren().end());
@@ -232,9 +233,9 @@ void create_submodule_data(py::module_& m) {
         .def("__str__", [](const Value& self){
             std::stringstream ss;
             try {
-                ss << self["value"].as<std::string>();
-            } catch (...) {
                 ss << self.as<std::string>();
+            } catch (...) {
+                ss << self;
             }
             return ss.str();
         })
