@@ -1,16 +1,12 @@
 import logging
 from asyncio import (CancelledError, Future, all_tasks, create_task,
                      current_task, gather, sleep, wait_for)
-from typing import AsyncGenerator
 
 import pytest
-import pytest_asyncio
-from pytest import FixtureRequest
 
 from aiopvxs.client import Context
 from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.data import Value
-from aiopvxs.nt import NTScalar
 from aiopvxs.server import Server
 
 _log = logging.getLogger(__file__)
@@ -19,9 +15,6 @@ _log = logging.getLogger(__file__)
 @pytest.mark.asyncio
 class TestClient:
 
-    #@pytest.mark.parametrize('server_pvs', [
-    #    {"scalar_int32": NTScalar(T.Int32).create()}
-    #])
     async def test_get_value(self, pvxs_test_server : Server,
                        pvxs_test_context : Context):
         server = pvxs_test_server

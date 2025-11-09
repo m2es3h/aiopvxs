@@ -3,9 +3,8 @@ import logging
 
 import pytest
 
-from aiopvxs.data import Member as M
 from aiopvxs.data import TypeCodeEnum as T
-from aiopvxs.data import TypeDef, Value
+from aiopvxs.data import Value
 from aiopvxs.nt import NTEnum, NTScalar
 
 _log = logging.getLogger(__file__)

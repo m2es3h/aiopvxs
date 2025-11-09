@@ -105,68 +105,6 @@ py::object cast_to_python_array(const shared_array<const void>& sa) {
 namespace pybind11 {
 namespace detail {
 
-#define SHARED_ARRAY_TYPE_CASTER(T, py_hint)                                                \
-template <>                                                                                 \
-struct type_caster<shared_array<const T>> {                                                 \
-    PYBIND11_TYPE_CASTER(shared_array<const T>, io_name(py_hint, "aiopvxs.data.Value"));    \
-                                                                                            \
-    static handle                                                                           \
-    cast(const shared_array<const T>& sa, return_value_policy policy, handle parent) {      \
-        /* copy-construct a python array from shared_array<T> elements */                   \
-        py::object array_array = py::module_::import("array").attr("array");                \
-        auto mv = py::memoryview::from_buffer(                                              \
-            sa.data(),                                                                      \
-            sizeof(T),                                                                      \
-            py::format_descriptor<T>::value,                                                \
-            {sa.size()},                                                                    \
-            {sizeof(T)}                                                                     \
-        );                                                                                  \
-                                                                                            \
-        return array_array(py::format_descriptor<T>::format(), mv);                         \
-    }                                                                                       \
-                                                                                            \
-    bool load(handle src, bool convert) {                                                   \
-        /* check if py_object is a buffer */                                                \
-        if (py::isinstance<py::buffer>(src)) {                                              \
-            py::buffer_info info = py::reinterpret_borrow<py::buffer>(src).request();       \
-            /* verify buffer is 1D */                                                       \
-            if (info.ndim != 1) {                                                           \
-                return false;                                                               \
-            }                                                                               \
-            /* check this load() method matches buffer data type */                         \
-            else if (!info.item_type_is_equivalent_to<T>()) {                               \
-                return false;                                                               \
-            }                                                                               \
-            /* create new shared_array<T> and update value */                               \
-            auto arr_begin = static_cast<const T*>(info.ptr);                               \
-            auto arr_end = static_cast<const T*>(arr_begin + info.shape[0]);                \
-            value = shared_array<const T>(arr_begin, arr_end);                              \
-            return true;                                                                    \
-        }                                                                                   \
-        /* check if py_object is a sequence */                                              \
-        else if (py::isinstance<py::sequence>(src)) {                                       \
-            /* sequences not yet supported */                                               \
-            return false;                                                                   \
-        }                                                                                   \
-        else {                                                                              \
-            return false;                                                                   \
-        }                                                                                   \
-    }                                                                                       \
-};
-
-/*SHARED_ARRAY_TYPE_CASTER(int8_t, "collections.abc.Buffer");
-SHARED_ARRAY_TYPE_CASTER(int16_t, "collections.abc.Buffer");
-SHARED_ARRAY_TYPE_CASTER(int32_t, "collections.abc.Buffer");
-SHARED_ARRAY_TYPE_CASTER(int64_t, "collections.abc.Buffer");
-SHARED_ARRAY_TYPE_CASTER(uint8_t, "collections.abc.Buffer");
-SHARED_ARRAY_TYPE_CASTER(uint16_t, "collections.abc.Buffer");
-SHARED_ARRAY_TYPE_CASTER(uint32_t, "collections.abc.Buffer");
-SHARED_ARRAY_TYPE_CASTER(uint64_t, "collections.abc.Buffer");
-
-SHARED_ARRAY_TYPE_CASTER(float, "collections.abc.Buffer");
-SHARED_ARRAY_TYPE_CASTER(double, "collections.abc.Buffer");*/
-
-
 template <>
 struct type_caster<shared_array<const void>> {
     PYBIND11_TYPE_CASTER(shared_array<const void>, io_name("collections.abc.Buffer | collections.abc.Sequence", "aiopvxs.data.Value"));

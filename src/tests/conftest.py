@@ -6,7 +6,6 @@ import pytest_asyncio
 
 from aiopvxs.client import Context
 from aiopvxs.data import TypeCodeEnum as T
-from aiopvxs.data import Value
 from aiopvxs.nt import NTScalar
 from aiopvxs.server import Server, SharedPV
 
@@ -18,7 +17,7 @@ async def pvxs_test_context() -> AsyncGenerator[Context]:
 @pytest_asyncio.fixture()
 async def pvxs_test_server() -> AsyncGenerator[Server]:
     val = NTScalar(T.Int32).create()
-    val['value'] = str(-42)
+    val['value'] = -42
     pv_int32 = SharedPV()
     pv_int32.open(val)
 

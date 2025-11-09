@@ -1,11 +1,43 @@
-#include <chrono>
-
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 #include <pvxs/client.h>
 
 namespace py = pybind11;
+
+inline std::function<void(pvxs::client::Result&&)>
+pvxs_result_handler(py::object loop, py::object py_future) {
+    return [loop, py_future](pvxs::client::Result&& result) {
+        try {
+            auto value = pvxs::Value(result());
+
+            py::gil_scoped_acquire lock;
+            loop.attr("call_soon_threadsafe")(
+                py::cpp_function([py_future, value]() {
+                    py_future.attr("set_result")(value);
+                })
+            );
+        }
+        catch (const std::runtime_error& exc_info) {
+            py::gil_scoped_acquire lock;
+            loop.attr("call_soon_threadsafe")(
+                py::cpp_function([py_future, exc_info]() {
+                    py::object py_exc_type = py::module_::import("aiopvxs").attr("client");
+                    py::object py_exc = py_exc_type.attr("RemoteError")(exc_info.what());
+                    py_future.attr("set_exception")(py_exc);
+                })
+            );
+        }
+    };
+}
+
+inline py::cpp_function
+py_future_done_handler(std::shared_ptr<pvxs::client::Operation> op) {
+    return py::cpp_function([op](py::object fut) {
+        if (fut.attr("cancelled")())
+            op->cancel();
+    });
+}
 
 
 void create_submodule_client(py::module_& m) {
@@ -18,7 +50,7 @@ void create_submodule_client(py::module_& m) {
         .def("name", &Operation::name)
         .def("cancel", &Operation::cancel);
 
-    py::class_<Context, py::smart_holder>(m, "Context")
+    py::class_<Context>(m, "Context")
         .def(py::init(&Context::fromEnv))
         .def("close", &Context::close)
 
@@ -27,36 +59,10 @@ void create_submodule_client(py::module_& m) {
             py::object py_future = loop.attr("create_future")();
 
             auto op_builder = self.get(pv_name)
-                .result([loop, py_future](Result&& result) {
-                    try {
-                        auto value = Value(result());
-
-                        py::gil_scoped_acquire lock;
-                        loop.attr("call_soon_threadsafe")(
-                            py::cpp_function([py_future, value]() {
-                                py_future.attr("set_result")(value);
-                            })
-                        );
-                    }
-                    catch (const std::runtime_error& exc_info) {
-                        py::gil_scoped_acquire lock;
-                        loop.attr("call_soon_threadsafe")(
-                            py::cpp_function([py_future, exc_info]() {
-                                py::object py_exc_type = py::module_::import("aiopvxs").attr("client");
-                                py::object py_exc = py_exc_type.attr("RemoteError")(exc_info.what());
-                                py_future.attr("set_exception")(py_exc);
-                            })
-                        );
-                    }
-                });
+                .result(pvxs_result_handler(loop, py_future));
 
             auto op = op_builder.exec();
-            py_future.attr("add_done_callback")(
-                py::cpp_function([op](py::object py_future) {
-                    if (py_future.attr("cancelled")())
-                        op->cancel();
-                })
-            );
+            py_future.attr("add_done_callback")(py_future_done_handler(op));
             return py_future;
         })
 
@@ -64,59 +70,19 @@ void create_submodule_client(py::module_& m) {
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
 
-            auto op_builder = self.put(pv_name);
-            /*
-            for (auto item : new_data) {
-                const std::string key = item.first.cast<std::string>();
-                const py::object& py_value = py::reinterpret_borrow<py::object>(item.second);
-                if (py::isinstance<py::int_>(py_value))
-                    op_builder.set(key, item.second.cast<int64_t>());
-                else if (py::isinstance<py::float_>(py_value))
-                    op_builder.set(key, item.second.cast<double>());
-                else if (py::isinstance<py::str>(py_value))
-                    op_builder.set(key, item.second.cast<std::string>());
-                else if (py::isinstance<py::sequence>(py_value) ||
-                         py::isinstance<py::buffer>(py_value))
-                    op_builder.set(key, item.second.cast<shared_array<const void>>());
-            }*/
-            op_builder.fetchPresent(true);
-            op_builder.build([new_data](Value&& current) {
-                Value toput(current.cloneEmpty());
-
-                py::gil_scoped_acquire lock;
-                py::cast(toput).attr("assign")(new_data);
-                return toput;
-            });
-            op_builder.result([loop, py_future](Result&& result) {
-                try {
-                    auto value = Value(result());
+            auto op_builder = self.put(pv_name)
+                .fetchPresent(true)
+                .build([new_data](Value&& current) {
+                    Value toput(current.cloneEmpty());
 
                     py::gil_scoped_acquire lock;
-                    loop.attr("call_soon_threadsafe")(
-                        py::cpp_function([py_future, value]() {
-                            py_future.attr("set_result")(value);
-                        })
-                    );
-                }
-                catch (const std::runtime_error& exc_info) {
-                    py::gil_scoped_acquire lock;
-                    loop.attr("call_soon_threadsafe")(
-                        py::cpp_function([py_future, exc_info]() {
-                            py::object py_exc_type = py::module_::import("aiopvxs").attr("client");
-                            py::object py_exc = py_exc_type.attr("RemoteError")(exc_info.what());
-                            py_future.attr("set_exception")(py_exc);
-                        })
-                    );
-                }
-            });
+                    py::cast(toput).attr("assign")(new_data);
+                    return toput;
+                })
+                .result(pvxs_result_handler(loop, py_future));
 
             auto op = op_builder.exec();
-            py_future.attr("add_done_callback")(
-                py::cpp_function([op](py::object py_future) {
-                    if (py_future.attr("cancelled")())
-                        op->cancel();
-                })
-            );
+            py_future.attr("add_done_callback")(py_future_done_handler(op));
             return py_future;
         }, py::keep_alive<0, 3>());
 

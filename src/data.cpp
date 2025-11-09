@@ -116,18 +116,6 @@ void create_submodule_data(py::module_& m) {
         .def("__setattr__", [](const Value& self, std::string& name, py::dict values_dict) {
             py::cast(self.lookup(name)).attr("assign")(values_dict);
         })
-        /*
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint8_t>&)>(&Value::update<const shared_array<const uint8_t>&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint16_t>&)>(&Value::update<const shared_array<const uint16_t>&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint32_t>&)>(&Value::update<const shared_array<const uint32_t>&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint64_t>&)>(&Value::update<const shared_array<const uint64_t>&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int8_t>&)>(&Value::update<const shared_array<const int8_t>&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int16_t>&)>(&Value::update<const shared_array<const int16_t>&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int32_t>&)>(&Value::update<const shared_array<const int32_t>&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int64_t>&)>(&Value::update<const shared_array<const int64_t>&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const float>&)>(&Value::update<const shared_array<const float>&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const double>&)>(&Value::update<const shared_array<const double>&, std::string&>))
-        */
 
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>))
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>))
@@ -136,18 +124,6 @@ void create_submodule_data(py::module_& m) {
         .def("__setitem__", [](const Value& self, std::string& name, py::dict values_dict) {
             py::cast(self.lookup(name)).attr("assign")(values_dict);
         })
-        /*
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint8_t>&)>(&Value::update<const shared_array<const uint8_t>&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint16_t>&)>(&Value::update<const shared_array<const uint16_t>&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint32_t>&)>(&Value::update<const shared_array<const uint32_t>&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const uint64_t>&)>(&Value::update<const shared_array<const uint64_t>&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int8_t>&)>(&Value::update<const shared_array<const int8_t>&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int16_t>&)>(&Value::update<const shared_array<const int16_t>&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int32_t>&)>(&Value::update<const shared_array<const int32_t>&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const int64_t>&)>(&Value::update<const shared_array<const int64_t>&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const float>&)>(&Value::update<const shared_array<const float>&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const double>&)>(&Value::update<const shared_array<const double>&, std::string&>))
-        */
 
         .def("get", [](const Value& self, const std::string& name, py::object def_value) {
             try {
