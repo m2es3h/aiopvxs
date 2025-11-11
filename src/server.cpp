@@ -42,6 +42,7 @@ void create_submodule_server(py::module_& m) {
         .def("interrupt", &Server::interrupt)
         .def("__enter__", [](Server& self) {
             self.start();
+            return self;
         })
         .def("__exit__", [](Server& self, py::object exc_type,
                                           py::object exc_value,

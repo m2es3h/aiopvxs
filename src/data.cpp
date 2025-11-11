@@ -12,6 +12,10 @@ namespace py = pybind11;
 void create_submodule_data(py::module_& m) {
     using namespace pvxs;
 
+    py::register_exception<NoField>(m, "NoField", PyExc_KeyError);
+    py::register_exception<NoConvert>(m, "NoConvert", PyExc_TypeError);
+    py::register_exception<LookupError>(m, "LookupError", PyExc_KeyError);
+
     py::native_enum<TypeCode::code_t>(m, "TypeCodeEnum", "enum.IntEnum")
         .value("Bool", TypeCode::code_t::Bool)
         .value("UInt8", TypeCode::code_t::UInt8)
@@ -97,15 +101,24 @@ void create_submodule_data(py::module_& m) {
             for (auto item : values_dict) {
                 const std::string key = item.first.cast<std::string>();
                 const py::object& py_value = py::reinterpret_borrow<py::object>(item.second);
-                try {
+                //try {
                     py::cast(self).attr("__setattr__")(key, py_value);
-                }
-                catch (const std::exception& e) {
-                    auto py_typename = py::str(py_value.attr("__class__").attr("__name__"));
+                //}
+                /*catch (py::error_already_set& e) {
                     std::stringstream ss;
-                    ss << "Cannot assign " << py_typename << " to '" << key << "'" << " field";
-                    throw py::value_error(ss.str());
-                }
+                    if (e.matches(PyExc_KeyError)) {
+                        ss << "No such field '" << key << "'";
+                        py::raise_from(e, PyExc_KeyError, ss.str().c_str());
+                    }
+                    else if (e.matches(PyExc_TypeError)) {
+                        auto pvxs_typename = self.lookup(key).type();
+                        auto py_typename = py::str(py_value.attr("__class__").attr("__name__"));
+                        ss << "Unable to assign " << pvxs_typename << " field '" << key << "' ";
+                        ss << "with " << py_typename << " '" << py_value << "'";
+                        py::raise_from(e, PyExc_TypeError, ss.str().c_str());
+                    }
+                    throw py::error_already_set();
+                }*/
             }
         })
 

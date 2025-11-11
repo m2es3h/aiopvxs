@@ -8,22 +8,39 @@ namespace py = pybind11;
 inline std::function<void(pvxs::client::Result&&)>
 pvxs_result_handler(py::object loop, py::object py_future) {
     return [loop, py_future](pvxs::client::Result&& result) {
+        py::gil_scoped_acquire lock;
         try {
-            auto value = pvxs::Value(result());
+            pvxs::Value value = pvxs::Value(result());
 
-            py::gil_scoped_acquire lock;
             loop.attr("call_soon_threadsafe")(
                 py::cpp_function([py_future, value]() {
                     py_future.attr("set_result")(value);
                 })
             );
         }
-        catch (const std::runtime_error& exc_info) {
-            py::gil_scoped_acquire lock;
+        catch (const py::key_error& e) {
+            py::object py_exc = py::module_::import("builtins").attr("KeyError")(e.what());
+
             loop.attr("call_soon_threadsafe")(
-                py::cpp_function([py_future, exc_info]() {
-                    py::object py_exc_type = py::module_::import("aiopvxs").attr("client");
-                    py::object py_exc = py_exc_type.attr("RemoteError")(exc_info.what());
+                py::cpp_function([py_future, py_exc]() {
+                    py_future.attr("set_exception")(py_exc);
+                })
+            );
+        }
+        catch (const py::type_error& e) {
+            py::object py_exc = py::module_::import("builtins").attr("TypeError")(e.what());
+
+            loop.attr("call_soon_threadsafe")(
+                py::cpp_function([py_future, py_exc]() {
+                    py_future.attr("set_exception")(py_exc);
+                })
+            );
+        }
+        catch (const std::exception& e) {
+            py::object py_exc = py::module_::import("builtins").attr("ValueError")(e.what());
+
+            loop.attr("call_soon_threadsafe")(
+                py::cpp_function([py_future, py_exc]() {
                     py_future.attr("set_exception")(py_exc);
                 })
             );
@@ -76,7 +93,17 @@ void create_submodule_client(py::module_& m) {
                     Value toput(current.cloneEmpty());
 
                     py::gil_scoped_acquire lock;
-                    py::cast(toput).attr("assign")(new_data);
+                    try {
+                        py::cast(toput).attr("assign")(new_data);
+                    }
+                    catch (py::error_already_set& e) {
+                        if (e.matches(PyExc_KeyError))
+                            throw py::key_error(e.what());
+                        else if (e.matches(PyExc_TypeError))
+                            throw py::type_error(e.what());
+                        else
+                            throw py::value_error(e.what());
+                    }
                     return toput;
                 })
                 .result(pvxs_result_handler(loop, py_future));
