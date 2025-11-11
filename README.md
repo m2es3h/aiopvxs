@@ -181,6 +181,7 @@ struct {
         int16_t number32 = 0
     } substruct
 }
+
 >>> val_container.desc = "some string"
 >>> val_container['flag'] = True
 >>> val_container.number32 = 999
@@ -199,20 +200,24 @@ struct {
         bool flag = false
     } substruct
 }
->>> int(val_container.number32)
-999
->>> str(val_container.number32)
-'999'
->>> val_container.substruct.as_dict()
-{'flag': False, 'array64': [1, 2, 3, 4, 5], 'number32': -888}
->>> [repr(val) for val in val_container.substruct]
-['int64_t[] = {5}[1, 2, 3, 4, 5]\n', 'int16_t = -888\n', 'bool = false\n']
->>> val_array = val_container.substruct.array64.as_array()
->>> type(val_array)
-<class 'array.array'>
->>> val_array
-array('q', [1, 2, 3, 4, 5])
->>> val_array.tolist()
-[1, 2, 3, 4, 5]
->>>
 ```
+
+Each field in the container is also a value type. Iterating over the Value
+container iterates over the outer-most fields of that value. The equivalent
+Python value of a field can be unwrapped using Python builtins such as
+`int(...)`, `str(...)`, `bool(...)`, `float(...)`, or using one of the
+`Value.as_type()` methods:
+
+```
+>>> from aiopvxs.data import Value
+>>> Value.
+Value.as_array(        Value.as_int_list(     Value.get(
+Value.as_bool(         Value.as_list(         Value.id(
+Value.as_dict(         Value.as_string(       Value.mro()
+Value.as_float(        Value.as_string_list(  Value.storageType(
+Value.as_float_list(   Value.assign(          Value.type(
+Value.as_int(          Value.cloneEmpty(
+```
+
+Incompatible conversions will raise the underlying aiopvxs.data.NoConvert
+exception, or a "Cast not yet implemented" RuntimeError.
