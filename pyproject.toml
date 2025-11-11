@@ -19,7 +19,8 @@ authors = [{name = "Mike Smith", email = "m2es3h@gmail.com"}]
 description = "Python asyncio API to the PVXS libraries"
 readme = "README.md"
 dependencies = [
-    "pvxslibs==1.4.0",
+    "pybind11==3.0",
+    "pvxslibs==1.4",
     "epicscorelibs>=7.0",
 ]
 
