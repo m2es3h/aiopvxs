@@ -2,7 +2,7 @@ import asyncio
 
 from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.nt import NTScalar
-from aiopvxs.server import SharedPV, Server
+from aiopvxs.server import Server, SharedPV
 
 # create Value
 val = NTScalar(T.Int32A).create()
