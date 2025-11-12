@@ -154,7 +154,7 @@ between PVAccess clients and servers. Using pybind11's default type casters
 plus custom type casters, aiopvxs enables encoding and decoding pvxs::Value
 data using Python data types.
 
-```bash
+```pycon
 python3
 >>> import array
 >>> from aiopvxs.data import Member as M
@@ -208,7 +208,7 @@ Python value of a field can be unwrapped using Python builtins such as
 `int(...)`, `str(...)`, `bool(...)`, `float(...)`, or using one of the
 `Value.as_type()` methods:
 
-```
+```pycon
 >>> from aiopvxs.data import Value
 >>> Value.
 Value.as_array(        Value.as_int_list(     Value.get(

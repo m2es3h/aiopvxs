@@ -10,6 +10,8 @@ namespace py = pybind11;
 
 
 void create_submodule_data(py::module_& m) {
+    m.doc() = "Data Type and Value classes";
+
     using namespace pvxs;
 
     py::register_exception<NoField>(m, "NoField", PyExc_KeyError);
