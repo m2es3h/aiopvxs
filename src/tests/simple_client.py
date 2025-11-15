@@ -6,26 +6,6 @@ from aiopvxs.client import Context, RemoteError
 client_ctx = Context()
 
 async def main():
-    put_op = client_ctx.put("test:pv:int32", {'value': [3]})
-    assert isinstance(put_op, asyncio.Future)
-
-    try:
-        # call put_op.cancel() before the await to cancel the operation
-        await asyncio.wait_for(put_op, timeout=3.0)
-    except asyncio.TimeoutError:
-        print("put operation failed: Timed out")
-    except asyncio.CancelledError:
-        print("put operation failed: Operation cancelled")
-    except RemoteError as e:
-        print("put operation failed: Server returned exception:", e)
-    except (KeyError, TypeError, LookupError) as e:
-        print("put value not compatible with pvxs.Value type:", e)
-    else:
-        print("put operation successful")
-    finally:
-        # asyncio.Future.done() is true in all cases
-        assert put_op.done()
-            
     # put new value
     new_value = {
         'value': [1, 2, 3, 4, 5],

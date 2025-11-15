@@ -1,10 +1,30 @@
+/*
+ * Project: aiopvxs
+ * File:    data.cpp
+ *
+ * This file is part of aiopvxs.
+ *
+ * https://github.com/m2es3h/aiopvxs
+ *
+ * Copyright (C) Michael Smith. All rights reserved.
+ *
+ * aiopvxs is free software: you can redistribute it and/or modify it
+ * under the terms of The 3-Clause BSD License.
+ *
+ * https://opensource.org/license/bsd-3-clause
+ *
+ * aiopvxs is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
 #include <pybind11/pybind11.h>
 #include <pybind11/native_enum.h>
 #include <pybind11/stl.h>
 
 #include <pvxs/data.h>
 
-#include "pvxs_types.h"
+#include "pvxs_types.hpp"
 
 namespace py = pybind11;
 
@@ -60,7 +80,8 @@ void create_submodule_data(py::module_& m) {
 
     py::class_<Member>(m, "Member")
         .def(py::init<TypeCode::code_t, std::string>())
-        .def(py::init([](TypeCode::code_t code, const std::string& name, const std::vector<Member>& children){
+        .def(py::init([](TypeCode::code_t code, const std::string& name,
+                         const std::vector<Member>& children){
             return Member(code, name, children);
         }));
 
@@ -73,7 +94,8 @@ void create_submodule_data(py::module_& m) {
 
     py::class_<TypeDef>(m, "TypeDef")
         .def(py::init<TypeCode::code_t>())
-        .def(py::init([](TypeCode::code_t code, const std::vector<Member>& children){
+        .def(py::init([](TypeCode::code_t code,
+                         const std::vector<Member>& children){
             return TypeDef(code, std::string(), children);
         }))
         .def("create", &TypeDef::create)
@@ -83,22 +105,25 @@ void create_submodule_data(py::module_& m) {
             return ss.str();
         });
 
-    py::class_<Value>(m, "Value")
-        //.def(py::init<Value>())
+    py::class_<Value>(m, "Value", "Generic data container")
+
         .def("type", &Value::type)
         .def("storageType", &Value::storageType)
         .def("id", &Value::id)
 
-        .def("cloneEmpty", &Value::cloneEmpty)
+        .def("cloneEmpty", &Value::cloneEmpty,
+                           "Return empty-initialised Value with same TypeDef")
 
         .def("__iter__", [](const Value& self) {
             return py::make_iterator(self.ichildren().begin(), self.ichildren().end());
-        }, py::keep_alive<0, 1>())
+        }, py::keep_alive<0, 1>(), "Iterate through outer-most fields in Value")
 
-        .def("__getattr__", static_cast<Value (Value::*)(const std::string&)>(&Value::lookup))
-        .def("__getitem__", static_cast<Value (Value::*)(const std::string&)>(&Value::lookup))
+        .def("__getattr__", static_cast<Value (Value::*)(const std::string&)>(&Value::lookup),
+                            "Lookup and return field in Value (no casting)")
+        .def("__getitem__", static_cast<Value (Value::*)(const std::string&)>(&Value::lookup),
+                            "Lookup and return field in Value (no casting)")
 
-        .def("assign", &Value::assign)
+        .def("assign", &Value::assign, "Assign new Value to Value (no casting)")
         .def("assign", [](const Value& self, py::dict values_dict) {
             for (auto item : values_dict) {
                 const std::string key = item.first.cast<std::string>();
@@ -122,23 +147,31 @@ void create_submodule_data(py::module_& m) {
                     throw py::error_already_set();
                 }*/
             }
-        })
+        }, "Iterate through python dictionary and cast values to Value fields")
 
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>))
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>))
+        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>),
+                            "Lookup field in Value and cast python int to Value")
+        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>),
+                            "Lookup field in Value and cast python float to Value")
+        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>),
+                            "Lookup field in Value and cast python string to Value")
+        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>),
+                            "Lookup field in Value and cast python list or array to Value")
         .def("__setattr__", [](const Value& self, std::string& name, py::dict values_dict) {
             py::cast(self.lookup(name)).attr("assign")(values_dict);
-        })
+        }, "Lookup field in Value and cast python dictionary to Value")
 
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>))
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>))
+        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>),
+                            "Lookup field in Value and cast python int to Value")
+        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>),
+                            "Lookup field in Value and cast python float to Value")
+        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>),
+                            "Lookup field in Value and cast python string to Value")
+        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>),
+                            "Lookup field in Value and cast python list or array to Value")
         .def("__setitem__", [](const Value& self, std::string& name, py::dict values_dict) {
             py::cast(self.lookup(name)).attr("assign")(values_dict);
-        })
+        }, "Lookup field in Value and cast python dictionary to Value")
 
         .def("get", [](const Value& self, const std::string& name, py::object def_value) {
             try {
@@ -147,15 +180,18 @@ void create_submodule_data(py::module_& m) {
             catch (const std::exception& e) {
                 return def_value;
             }
-        }, py::arg("name"), py::arg("def_value") = py::none())
+        }, py::arg("name"), py::arg("def_value") = py::none(),
+           "Lookup field from Value and cast to python value if found, otherwise return python None")
 
-        .def("as_bool", static_cast<bool (Value::*)(void) const>(&Value::as<bool>))
-        .def("__bool__",  static_cast<bool (Value::*)(void) const>(&Value::as<bool>))
+        .def("as_bool", static_cast<bool (Value::*)(void) const>(&Value::as<bool>),
+                        "Returns a python bool representation of Value")
+        .def("__bool__", static_cast<bool (Value::*)(void) const>(&Value::as<bool>),
+                         "Cast Value to python bool")
 
-        .def("as_int", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>))
-        .def("__int__", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>))
-
-        .def("as_array", static_cast<shared_array<const void> (Value::*)(void) const>(&Value::as<shared_array<const void>>))
+        .def("as_int", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>),
+                       "Returns a python int representation of Value")
+        .def("__int__", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>),
+                        "Cast Value to python int")
 
         .def("as_list", [](const Value& self){
             auto sa = self.as<shared_array<const void>>();
@@ -163,7 +199,7 @@ void create_submodule_data(py::module_& m) {
                 return py::cast(sa);
             else
                 return py::cast(sa).attr("tolist")();
-        })
+        }, "Returns a python list representation of Value")
 
         .def("as_dict", [](const Value& self){
             py::dict py_dict;
@@ -196,16 +232,20 @@ void create_submodule_data(py::module_& m) {
                 }
             }
             return py_dict;
-        })
+        }, "Returns a python dictionary representation of Value")
 
+        .def("as_array", static_cast<shared_array<const void> (Value::*)(void) const>(&Value::as<shared_array<const void>>),
+                         "Returns a python array.array() representation of Value")
+
+        // convenient to call these instead of .as_array().tolist()
         .def("as_int_list", [](const Value& self){
             py::object array_array = py::module_::import("array").attr("array");
             return array_array("q", self.as<shared_array<const void>>()).attr("tolist")();
-        })
+        }, "Returns a python list[int] representation of Value")
         .def("as_float_list", [](const Value& self){
             py::object array_array = py::module_::import("array").attr("array");
             return array_array("d", self.as<shared_array<const void>>()).attr("tolist")();
-        })
+        }, "Returns a python list[fload] representation of Value")
         .def("as_string_list", [](const Value& self){
             auto sa = self.as<shared_array<const void>>();
             if (sa.original_type() == ArrayType::String) {
@@ -215,12 +255,17 @@ void create_submodule_data(py::module_& m) {
                 py::object array_array = py::module_::import("array").attr("array");
                 return array_array("u", self.as<shared_array<const void>>()).attr("tolist")();
             }
-        })
+        }, "Returns a python list[str] representation of Value")
 
-        .def("as_float", static_cast<double (Value::*)(void) const>(&Value::as<double>))
-        .def("__float__",  static_cast<double (Value::*)(void) const>(&Value::as<double>))
+        .def("as_float", static_cast<double (Value::*)(void) const>(&Value::as<double>),
+                         "Returns a python float representation of Value")
+        .def("__float__", static_cast<double (Value::*)(void) const>(&Value::as<double>),
+                          "Cast Value to python float")
 
-        .def("as_string", static_cast<std::string (Value::*)(void) const>(&Value::as<std::string>))
+        .def("as_string", static_cast<std::string (Value::*)(void) const>(&Value::as<std::string>),
+                          "Returns a python string representation of Value")
+
+        // string representation of values, very basic implementation, could be better
         .def("__str__", [](const Value& self){
             std::stringstream ss;
             try {
@@ -229,10 +274,10 @@ void create_submodule_data(py::module_& m) {
                 ss << self;
             }
             return ss.str();
-        })
+        }, "Cast Value to python string")
         .def("__repr__", [](const Value& self){
             std::stringstream ss;
             ss << self;
             return ss.str();
-        });
+        }, "Returns a string representation of Value");
 }

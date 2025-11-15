@@ -36,7 +36,7 @@ This module enables asynchronous interaction with PVAccess servers and clients
 from Python. Bindings, type casting, and object lifetime management between
 Python <-> C++ is handled by pybind11.
 
-To test that the module is able to find and load pvxs:
+To test that aiopvxs is able to find and load the pip installed pvxs library:
 
 ```bash
 python3
@@ -185,7 +185,7 @@ struct {
 >>> val_container.desc = "some string"
 >>> val_container['flag'] = True
 >>> val_container.number32 = 999
->>> val_container.substruct.flag = False
+>>> val_container['substruct.flag'] = False
 >>> val_container.substruct.number32 = -888
 >>> val_container.substruct["array64"] = [1, 2, 3, 4, 5]
 >>> print(val_container)

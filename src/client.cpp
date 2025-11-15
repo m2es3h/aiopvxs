@@ -1,3 +1,23 @@
+/*
+ * Project: aiopvxs
+ * File:    client.cpp
+ *
+ * This file is part of aiopvxs.
+ *
+ * https://github.com/m2es3h/aiopvxs
+ *
+ * Copyright (C) Michael Smith. All rights reserved.
+ *
+ * aiopvxs is free software: you can redistribute it and/or modify it
+ * under the terms of The 3-Clause BSD License.
+ *
+ * https://opensource.org/license/bsd-3-clause
+ *
+ * aiopvxs is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -14,7 +34,7 @@ namespace py = pybind11;
  *
  * The result is not directly assigned, rather a callback on the event
  * loop is scheduled to run very soon. This is the thread-safe way to
- * synchronized C++ events with Python asyncio events.
+ * synchronize C++ events with Python asyncio events.
  *
  */
 inline std::function<void(pvxs::client::Result&&)>
@@ -107,7 +127,7 @@ void create_submodule_client(py::module_& m) {
         .def("close", &Context::close, "Disconnects any active clients and closes network connection")
 
         .def("get", [](Context& self, std::string& pv_name) {
-            // the result of this method is an asyncio.Future, so  get() should be
+            // the result of this method is an asyncio.Future, so get() can be
             // treated like a co-routine (must await get(...) to retrieve the result)
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
@@ -127,8 +147,8 @@ void create_submodule_client(py::module_& m) {
            "representing the future result of the operation")
 
         .def("put", [](Context& self, std::string& pv_name, py::dict new_data) {
-            // the result of this method is an asyncio.Future, so  get() should be
-            // treated like a co-routine (must await get(...) to retrieve the result)
+            // the result of this method is an asyncio.Future, so put() can be
+            // treated like a co-routine (must await put(...) to retrieve the result)
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
 

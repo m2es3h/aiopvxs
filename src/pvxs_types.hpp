@@ -1,3 +1,23 @@
+/*
+ * Project: aiopvxs
+ * File:    pvxs_types.h
+ *
+ * This file is part of aiopvxs.
+ *
+ * https://github.com/m2es3h/aiopvxs
+ *
+ * Copyright (C) Michael Smith. All rights reserved.
+ *
+ * aiopvxs is free software: you can redistribute it and/or modify it
+ * under the terms of The 3-Clause BSD License.
+ *
+ * https://opensource.org/license/bsd-3-clause
+ *
+ * aiopvxs is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -74,7 +94,7 @@ bool load_from_python_array(const py::buffer src, shared_array<const void>& sa) 
 py::object cast_to_python_array(const shared_array<const void>& sa) {
     py::object array_array = py::module_::import("array").attr("array");
 
-    /* return python array with copy of shared_array contents */
+    // return python array with copy of shared_array contents
     switch (sa.original_type()) {
         case ArrayType::Bool:
         case ArrayType::UInt8:
@@ -107,7 +127,8 @@ namespace detail {
 
 template <>
 struct type_caster<shared_array<const void>> {
-    PYBIND11_TYPE_CASTER(shared_array<const void>, io_name("collections.abc.Buffer | collections.abc.Sequence", "aiopvxs.data.Value"));
+    PYBIND11_TYPE_CASTER(shared_array<const void>, io_name("collections.abc.Buffer | collections.abc.Sequence",
+                                                           "aiopvxs.data.Value"));
 
     static handle
     cast(const shared_array<const void>& sa, return_value_policy policy, handle parent) {

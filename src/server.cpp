@@ -1,3 +1,23 @@
+/*
+ * Project: aiopvxs
+ * File:    server.cpp
+ *
+ * This file is part of aiopvxs.
+ *
+ * https://github.com/m2es3h/aiopvxs
+ *
+ * Copyright (C) Michael Smith. All rights reserved.
+ *
+ * aiopvxs is free software: you can redistribute it and/or modify it
+ * under the terms of The 3-Clause BSD License.
+ *
+ * https://opensource.org/license/bsd-3-clause
+ *
+ * aiopvxs is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
