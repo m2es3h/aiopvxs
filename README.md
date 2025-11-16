@@ -59,11 +59,13 @@ from aiopvxs.nt import NTScalar
 from aiopvxs.server import Server, SharedPV
 
 # create SharedPV with Value
-pv_int32 = SharedPV(nt=NTScalar(T.Int32A).build(),
-                    initial={
-                        'value': [0, -1, -2, -3, -4, -5],
-                        'alarm.message': "ints are negative"
-                    })
+pv_int32 = SharedPV(
+    nt=NTScalar(T.Int32A).build(),
+    initial={
+        'value': [0, -1, -2, -3, -4, -5],
+        'alarm.message': "ints are negative"
+    }
+)
 
 async def main():
     try:
@@ -171,7 +173,6 @@ python3
 ...        M(T.Int64A, "array64"),
 ...    ])
 ... ]).create()
-
 
 >>> print(val_container)
 struct {
