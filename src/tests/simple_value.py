@@ -3,15 +3,19 @@ import array
 from aiopvxs.data import Member as M
 from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.data import TypeDef
-from aiopvxs.nt import NTEnum, NTScalar
 
-y0 = M(T.String, "desc")
-y1 = M(T.Bool, "flag")
-y2 = M(T.Int16, "number32")
-y3 = M(T.Int64A, "array64")
-y4 = M(T.Struct, "substruct", set({y1, y2, y3}))
+val_container = TypeDef(T.Struct, [
+    M(T.String, "desc"),
+    M(T.Bool, "flag"),
+    M(T.Int16, "number32"),
+    M(T.Int64A, "array64"),
+    M(T.Struct, "substruct", [
+        M(T.Bool, "flag"),
+        M(T.Int16, "number32"),
+        M(T.Int64A, "array64"),
+    ])
+]).create()
 
-val_container = TypeDef(T.Struct, [y0, y1, y2, y3, y4]).create()
 print(val_container)
 """
 struct {

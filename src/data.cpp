@@ -107,6 +107,7 @@ void create_submodule_data(py::module_& m) {
 
     py::class_<Value>(m, "Value", "Generic data container")
 
+        .def(py::init<const Value&>())
         .def("type", &Value::type)
         .def("storageType", &Value::storageType)
         .def("id", &Value::id)

@@ -54,11 +54,21 @@ void create_submodule_server(py::module_& m) {
         // constructors
         .def(py::init(&SharedPV::buildMailbox), "Initialise writable SharedPV")
         .def(py::init([](const TypeDef& nt, Value initial) {
-            auto init_value = nt.create().assign(initial);
+            auto init_value = nt.create();
+            init_value.assign(initial);
+
             auto pv = SharedPV::buildMailbox();
-            pv.open(init_value);
+            pv.open(initial);
             return pv;
-        }), py::arg("nt"), py::arg("initial"), "Provide data type and initial value to SharedPV")
+        }), py::arg("nt"), py::arg("initial"), "Provide data type and initialise SharedPV from Value")
+        .def(py::init([](const TypeDef& nt, py::dict initial) {
+            auto init_value = py::cast(nt.create());
+            init_value.attr("assign")(initial);
+
+            auto pv = SharedPV::buildMailbox();
+            pv.open(init_value.cast<Value&>());
+            return pv;
+        }), py::arg("nt"), py::arg("initial"), "Provide data type and initialise SharedPV from python dictionary")
  
         // class methods
         .def("open", &SharedPV::open, "Infer data type from initial value to SharedPV")

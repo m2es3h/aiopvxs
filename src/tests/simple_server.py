@@ -4,13 +4,12 @@ from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.nt import NTScalar
 from aiopvxs.server import Server, SharedPV
 
-# create Value
-val = NTScalar(T.Int32A).create()
-val['value'] = [-1, -2, -3, -4, -5]
-val.alarm.message = "ints are negative"
 # create SharedPV with Value
-pv_int32 = SharedPV()
-pv_int32.open(val)
+pv_int32 = SharedPV(nt=NTScalar(T.Int32A).build(),
+                    initial={
+                        'value': [-1, -2, -3, -4, -5],
+                        'alarm.message': "ints are negative"
+                    })
 
 async def main():
     try:

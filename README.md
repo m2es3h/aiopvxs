@@ -48,8 +48,8 @@ python3
 
 ### Simple Server
 
-aiopvxs equivalent example to the pvxs shortest server:
-https://epics-base.github.io/pvxs/example.html#shortest-server
+aiopvxs shortest server example (compare to C++ example:
+https://epics-base.github.io/pvxs/example.html#shortest-server)
 
 ```python
 import asyncio
@@ -58,13 +58,12 @@ from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.nt import NTScalar
 from aiopvxs.server import Server, SharedPV
 
-# create Value
-val = NTScalar(T.Int32A).create()
-val['value'] = [-1, -2, -3, -4, -5]
-val.alarm.message = "ints are negative"
 # create SharedPV with Value
-pv_int32 = SharedPV()
-pv_int32.open(val)
+pv_int32 = SharedPV(nt=NTScalar(T.Int32A).build(),
+                    initial={
+                        'value': [0, -1, -2, -3, -4, -5],
+                        'alarm.message': "ints are negative"
+                    })
 
 async def main():
     try:
@@ -85,8 +84,8 @@ asyncio.run(main())
 
 ### Simple Client
 
-aiopvxs equivalent example to the pvxs shortest client:
-https://epics-base.github.io/pvxs/example.html#client-demo
+aiopvxs shortest client example (compare to C++ example:
+https://epics-base.github.io/pvxs/example.html#client-demo)
 
 ```python
 import asyncio
@@ -160,15 +159,20 @@ python3
 >>> from aiopvxs.data import Member as M
 >>> from aiopvxs.data import TypeCodeEnum as T
 >>> from aiopvxs.data import TypeDef
->>> from aiopvxs.nt import NTEnum, NTScalar
 
->>> y0 = M(T.String, "desc")
->>> y1 = M(T.Bool, "flag")
->>> y2 = M(T.Int16, "number32")
->>> y3 = M(T.Int64A, "array64")
->>> y4 = M(T.Struct, "substruct", set({y1, y2, y3}))
+>>> val_container = TypeDef(T.Struct, [
+...    M(T.String, "desc"),
+...    M(T.Bool, "flag"),
+...    M(T.Int16, "number32"),
+...    M(T.Int64A, "array64"),
+...    M(T.Struct, "substruct", [
+...        M(T.Bool, "flag"),
+...        M(T.Int16, "number32"),
+...        M(T.Int64A, "array64"),
+...    ])
+... ]).create()
 
->>> val_container = TypeDef(T.Struct, [y0, y1, y2, y3, y4]).create()
+
 >>> print(val_container)
 struct {
     string desc = ""
