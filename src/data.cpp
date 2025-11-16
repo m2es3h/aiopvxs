@@ -198,6 +198,8 @@ void create_submodule_data(py::module_& m) {
             auto sa = self.as<shared_array<const void>>();
             if (sa.original_type() == ArrayType::String)
                 return py::cast(sa);
+            else if (sa.original_type() == ArrayType::Null)
+                return py::list().cast<py::object>();
             else
                 return py::cast(sa).attr("tolist")();
         }, "Returns a python list representation of Value")

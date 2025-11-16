@@ -156,7 +156,7 @@ struct type_caster<shared_array<const void>> {
         else if (py::isinstance<py::sequence>(src)) {
             // cast sequence to equivalent std::vector type and copy-construct new shared_array
             py::sequence seq = py::reinterpret_borrow<py::sequence>(src);
-            if (py::isinstance<py::int_>(seq[0]))
+            if (seq.empty() || py::isinstance<py::int_>(seq[0]))
                 return load_from_python_seq<int64_t>(seq, value);
             else if (py::isinstance<py::float_>(seq[0]))
                 return load_from_python_seq<double>(seq, value);
