@@ -19,6 +19,8 @@
  */
 
 #include <pybind11/pybind11.h>
+#include <pybind11/native_enum.h>
+#include <pybind11/functional.h>
 #include <pybind11/stl.h>
 
 #include <pvxs/client.h>
@@ -116,6 +118,18 @@ void create_submodule_client(py::module_& m) {
 
     py::register_exception<RemoteError>(m, "RemoteError", PyExc_RuntimeError);
 
+    py::native_enum<Discovered::event_t>(m, "EventTypeEnum", "enum.IntEnum")
+        .value("Online", Discovered::event_t::Online)
+        .value("Timeout", Discovered::event_t::Timeout)
+        .finalize();
+
+    py::class_<Discovered>(m, "Discovered", "")
+        .def_readonly("event", &Discovered::event)
+        .def_readonly("peerVersion", &Discovered::peerVersion)
+        .def_readonly("peer", &Discovered::peer)
+        .def_readonly("proto", &Discovered::proto)
+        .def_readonly("server", &Discovered::server);
+
     // Operations are always wrapped in a shared_ptr<>, define py::smart_holder
     // here to auto-matically manage that
     py::class_<Operation, py::smart_holder>(m, "Operation", "Represents the in-progress network transaction")
@@ -143,8 +157,8 @@ void create_submodule_client(py::module_& m) {
             py_future.attr("add_done_callback")(py_future_done_handler(op));
             // return asyncio.Future representing the future result of the operation
             return py_future;
-        }, "Constructs a GetBuilder for the operation and returns asyncio.Future "
-           "representing the future result of the operation")
+        }, "Constructs a GetBuilder for the operation and executes it, returning "
+           "an asyncio.Future representing the future result of the operation")
 
         .def("put", [](Context& self, std::string& pv_name, py::dict new_data) {
             // the result of this method is an asyncio.Future, so put() can be
@@ -192,7 +206,30 @@ void create_submodule_client(py::module_& m) {
             return py_future;
         // the py::keep_alive means the 3rd argument (py::dict new_data) must live at least as long
         // as the return value, otherwise new_data might get cleaned up before .build() callback
-        }, py::keep_alive<0, 3>(), "Constructs a PutBuilder for the operation and returns "
-                                   "asyncio.Future representing the future result of the operation");
+        }, py::keep_alive<0, 3>(), "Constructs a PutBuilder for the operation and executes it, returning "
+                                   "an asyncio.Future representing the future result of the operation")
+
+        .def("discover", [](Context& self, std::function<void(const Discovered&)> cb, bool do_ping) {
+            // the result of this method is an asyncio.Future, so get() can be
+            // treated like a co-routine (must await get(...) to retrieve the result)
+            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
+            py::object py_future = loop.attr("create_future")();
+
+            // make a DiscoverBuilder
+            // callback "cb" is actually a temporary std::function created by pybind11
+            // that can be moved
+            auto op_builder = self.discover(std::move(cb))
+                .pingAll(do_ping);
+
+            // start the operation
+            auto op = op_builder.exec();
+            // attach done handler to the asyncio.Future (to call op.cancel() when done)
+            py_future.attr("add_done_callback")(py_future_done_handler(op));
+            // return asyncio.Future, can await with timeout or call .cancel() on it
+            return py_future;
+        }, "Constructs a DiscoverBuilder for the operation and executes it, returning "
+           "an asyncio.Future that can be awaited (with a timeout) or cancelled. It will "
+           "never return a result, rather the discover results will arrive via the provided "
+           "callback function.");
 
 }
