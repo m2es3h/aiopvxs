@@ -4,7 +4,7 @@ from asyncio import (CancelledError, Future, all_tasks, create_task,
 
 import pytest
 
-from aiopvxs.client import Context
+from aiopvxs.client import Context, Discovered
 from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.data import Value
 from aiopvxs.server import Server
@@ -112,3 +112,24 @@ class TestClient:
         remaining_tasks = list(t.get_name() for t in all_tasks() if t != current_task())
         await gather(*other_tasks)
         assert all(t == 'slowtask' for t in remaining_tasks)
+
+@pytest.mark.asyncio
+class TestClientCallbacks:
+
+    async def test_discover(self, pvxs_test_server : Server,
+                            pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        def cb_function(discovered : Discovered):
+            _log.info("In Context.discover() callback function")
+            #print(discovered, discovered.event.name)
+            #print(discovered.peerVersion, discovered.peer, discovered.proto, discovered.server)
+            assert discovered.event.name == "Online"
+
+        get_op =  client.discover(cb_function, True)
+        assert isinstance(get_op, Future)
+        try:
+            await wait_for(get_op, timeout=0.25)
+        except TimeoutError:
+            pass
