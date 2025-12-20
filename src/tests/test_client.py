@@ -1,6 +1,6 @@
 import logging
-from asyncio import (CancelledError, Future, all_tasks, create_task,
-                     current_task, gather, sleep, wait_for)
+from asyncio import (CancelledError, Future, Queue, all_tasks, create_task,
+                     current_task, gather, timeout, sleep, wait_for)
 
 import pytest
 
@@ -127,9 +127,30 @@ class TestClientCallbacks:
             #print(discovered.peerVersion, discovered.peer, discovered.proto, discovered.server)
             assert discovered.event.name == "Online"
 
-        get_op =  client.discover(cb_function, True)
-        assert isinstance(get_op, Future)
+        discover_op =  client.discover(cb_function, True)
+        assert isinstance(discover_op, Future)
+
         try:
-            await wait_for(get_op, timeout=0.25)
+            await wait_for(discover_op, timeout=0.25)
         except TimeoutError:
-            pass
+            discover_op.cancel()
+
+    async def test_monitor(self, pvxs_test_server : Server,
+                           pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        q = Queue()
+
+        monitor_op = client.monitor("scalar_int32", q)
+        assert isinstance(monitor_op, Future)
+
+        try:
+            await wait_for(monitor_op, timeout=0.25)
+        except TimeoutError:
+            monitor_op.cancel()
+
+        assert not q.empty()
+        item = await q.get()
+        _log.info("Context.monitor() returned %s", item)
+        assert isinstance(item, Value)
