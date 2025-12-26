@@ -123,6 +123,10 @@ void create_submodule_client(py::module_& m) {
 
     py::register_exception<RemoteError>(m, "RemoteError", PyExc_RuntimeError);
 
+    py::register_exception<Connected>(m, "Connected", PyExc_RuntimeError);
+    py::register_exception<Disconnect>(m, "Disconnected", PyExc_RuntimeError);
+    py::register_exception<Finished>(m, "Finished", PyExc_RuntimeError);
+
     py::native_enum<Discovered::event_t>(m, "EventTypeEnum", "enum.IntEnum")
         .value("Online", Discovered::event_t::Online)
         .value("Timeout", Discovered::event_t::Timeout)
@@ -241,7 +245,7 @@ void create_submodule_client(py::module_& m) {
            "never return a result, rather the discover results will arrive via the provided "
            "callback function.")
 
-        .def("monitor", [](Context& self, std::string& pv_name, py::object py_queue) {
+        .def("monitor", [](Context& self, std::string& pv_name, std::function<void(py::object)> cb) {
             // the result of this method is an asyncio.Future,
             // await discover(...) with a timeout
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
@@ -249,19 +253,33 @@ void create_submodule_client(py::module_& m) {
 
             // make a MonitorBuilder
             auto op_builder = self.monitor(pv_name)
-                .event([py_queue](Subscription& sub) {
+                .event([cb](Subscription& sub) {
+                    Value val_update;
+
                     // GIL lock not automatically held in C++ callback,
                     // acquire GIL lock when adding to python Queue
+                    py::gil_scoped_acquire lock;
                     try {
-                        Value val_update = sub.pop();
+                        val_update = sub.pop();
                         if (val_update) {
-                            py::gil_scoped_acquire lock;
-                            py_queue.attr("put_nowait")(val_update);
+                            cb(py::cast(val_update));
                         }
                     }
+                    catch (py::cast_error& e) {
+                        py::print("Cannot cast Value to Python type in monitor callback:", e.what());
+                        throw;
+                    }
+                    catch (py::error_already_set& e) {
+                        py::print("Python exception thrown in monitor callback:", e.what());
+                        throw;
+                    }
+                    catch (Finished& fin) { cb(py::cast(fin)); }
+                    catch (Connected& con) { cb(py::cast(con)); }
+                    catch (Disconnect& dis) { cb(py::cast(dis)); }
+                    catch (RemoteError& e) { cb(py::cast(e)); }
                     catch (std::exception& e) {
-                        py::gil_scoped_acquire lock;
-                        py_queue.attr("put_nowait")(e);
+                        py::print("C++ exception thrown in monitor callback:", e.what());
+                        cb(py::cast(e));
                     }
                 });
 
