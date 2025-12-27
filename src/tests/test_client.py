@@ -1,10 +1,10 @@
 import logging
-from asyncio import (CancelledError, Future, all_tasks, create_task,
-                     current_task, gather, sleep, wait_for)
+from asyncio import (CancelledError, Future, Queue, all_tasks, create_task,
+                     current_task, gather, timeout, sleep, wait_for)
 
 import pytest
 
-from aiopvxs.client import Context, Discovered
+from aiopvxs.client import Context, Discovered, Subscription
 from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.data import Value
 from aiopvxs.server import Server
@@ -127,9 +127,44 @@ class TestClientCallbacks:
             #print(discovered.peerVersion, discovered.peer, discovered.proto, discovered.server)
             assert discovered.event.name == "Online"
 
-        get_op =  client.discover(cb_function, True)
-        assert isinstance(get_op, Future)
+        discover_op =  client.discover(cb_function, True)
+        assert isinstance(discover_op, Future)
+
         try:
-            await wait_for(get_op, timeout=0.25)
+            await wait_for(discover_op, timeout=0.25)
         except TimeoutError:
-            pass
+            discover_op.cancel()
+
+    async def test_monitor_with_cb(self, pvxs_test_server : Server,
+                                   pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        def cb_function(value_update):
+            _log.info("In Context.monitor() callback function")
+            assert int(value_update.value) == -42
+
+        monitor_op = client.monitor("scalar_int32", cb_function)
+        assert isinstance(monitor_op, Future)
+
+        try:
+            await wait_for(monitor_op, timeout=0.25)
+        except TimeoutError:
+            monitor_op.cancel()
+
+    async def test_monitor_with_q(self, pvxs_test_server : Server,
+                                  pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        q = Queue()
+
+        monitor_op = client.monitor("scalar_int32", q.put_nowait)
+        assert isinstance(monitor_op, Future)
+
+        item = await wait_for(q.get(), timeout=0.25)
+        _log.info("Context.monitor() returned %s", item)
+        assert isinstance(item, Value)
+
+        monitor_op.cancel()
+        assert q.empty()

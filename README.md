@@ -148,6 +148,36 @@ finally:
     assert put_op.done()
 ```
 
+client.Context.monitor() wraps a pvxs::client::Subscription() in an
+asyncio.Future(). Keep the reference to the Future object or wait with
+a timeout to keep the subscription alive for a specified amount of time.
+
+```python
+import asyncio
+
+from aiopvxs.client import Context
+
+# instantiate new client Context
+client_ctx = Context()
+
+# define a callback function
+# alternatively, define q = asyncio.Queue() and use q.put_nowait() as callback
+def cb_function(value_update):
+    print("In Context.monitor() callback function")
+    print("Value is", value_update.value)
+
+async def main():
+    monitor_op = client_ctx.monitor("scalar_int32", cb_function)
+    assert isinstance(monitor_op, Future)
+
+    try:
+        await wait_for(monitor_op, timeout=10.0)
+    except TimeoutError:
+        pass  # the timeout calls monitor_op.cancel()
+
+asyncio.run(main())
+```
+
 ### Working with pvxs.Value object
 
 The pvxs::Value object is the API used to exchange data of arbitrary types

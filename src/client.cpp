@@ -99,8 +99,13 @@ pvxs_result_handler(py::object loop, py::object py_future) {
  * reference to the Operation until after the Operation is complete.
  *
  */
+template <typename T>
 inline py::cpp_function
-py_future_done_handler(std::shared_ptr<pvxs::client::Operation> op) {
+py_future_done_handler(std::shared_ptr<T> op) {
+   static_assert(std::is_same<T, pvxs::client::Operation>::value ||
+                 std::is_same<T, pvxs::client::Subscription>::value,
+                "Only Operation and Subscription are supported");
+
     // the lambda capture here is keeping the operation alive while it runs
     return py::cpp_function([op](py::object fut) {
         // if Future was cancelled, also call Operation::cancel()
@@ -117,6 +122,10 @@ void create_submodule_client(py::module_& m) {
     using namespace pvxs::client;
 
     py::register_exception<RemoteError>(m, "RemoteError", PyExc_RuntimeError);
+
+    py::register_exception<Connected>(m, "Connected", PyExc_RuntimeError);
+    py::register_exception<Disconnect>(m, "Disconnected", PyExc_RuntimeError);
+    py::register_exception<Finished>(m, "Finished", PyExc_RuntimeError);
 
     py::native_enum<Discovered::event_t>(m, "EventTypeEnum", "enum.IntEnum")
         .value("Online", Discovered::event_t::Online)
@@ -135,6 +144,10 @@ void create_submodule_client(py::module_& m) {
     py::class_<Operation, py::smart_holder>(m, "Operation", "Represents the in-progress network transaction")
         .def("name", &Operation::name, "Operation name")
         .def("cancel", &Operation::cancel, "Cancels a in-progress network transaction");
+
+    py::class_<Subscription, py::smart_holder>(m, "Subscription", "Represents the active event subscription")
+        .def("name", &Subscription::name, "Operation name")
+        .def("cancel", &Subscription::cancel, "Cancels an active event subscription");
 
     py::class_<Context>(m, "Context", "PVAccess protocol client")
         .def(py::init(&Context::fromEnv), "Initialise a Context with settings from Config::fromEnv()")
@@ -210,8 +223,8 @@ void create_submodule_client(py::module_& m) {
                                    "an asyncio.Future representing the future result of the operation")
 
         .def("discover", [](Context& self, std::function<void(const Discovered&)> cb, bool do_ping) {
-            // the result of this method is an asyncio.Future, so get() can be
-            // treated like a co-routine (must await get(...) to retrieve the result)
+            // the result of this method is an asyncio.Future,
+            // await discover(...) with a timeout
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
 
@@ -230,6 +243,54 @@ void create_submodule_client(py::module_& m) {
         }, "Constructs a DiscoverBuilder for the operation and executes it, returning "
            "an asyncio.Future that can be awaited (with a timeout) or cancelled. It will "
            "never return a result, rather the discover results will arrive via the provided "
-           "callback function.");
+           "callback function.")
 
+        .def("monitor", [](Context& self, std::string& pv_name, std::function<void(py::object)> cb) {
+            // the result of this method is an asyncio.Future,
+            // await discover(...) with a timeout
+            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
+            py::object py_future = loop.attr("create_future")();
+
+            // make a MonitorBuilder
+            auto op_builder = self.monitor(pv_name)
+                .event([cb](Subscription& sub) {
+                    Value val_update;
+
+                    // GIL lock not automatically held in C++ callback,
+                    // acquire GIL lock when adding to python Queue
+                    py::gil_scoped_acquire lock;
+                    try {
+                        val_update = sub.pop();
+                        if (val_update) {
+                            cb(py::cast(val_update));
+                        }
+                    }
+                    catch (py::cast_error& e) {
+                        py::print("Cannot cast Value to Python type in monitor callback:", e.what());
+                        throw;
+                    }
+                    catch (py::error_already_set& e) {
+                        py::print("Python exception thrown in monitor callback:", e.what());
+                        throw;
+                    }
+                    catch (Finished& fin) { cb(py::cast(fin)); }
+                    catch (Connected& con) { cb(py::cast(con)); }
+                    catch (Disconnect& dis) { cb(py::cast(dis)); }
+                    catch (RemoteError& e) { cb(py::cast(e)); }
+                    catch (std::exception& e) {
+                        py::print("C++ exception thrown in monitor callback:", e.what());
+                        cb(py::cast(e));
+                    }
+                });
+
+            // start the operation
+            auto op = op_builder.exec();
+            // attach done handler to the asyncio.Future (to call op.cancel() when done)
+            py_future.attr("add_done_callback")(py_future_done_handler(op));
+            // return asyncio.Future, can await with timeout or call .cancel() on it
+            return py_future;
+        }, "Constructs a MonitorBuilder for the operation and executes it, returning "
+           "an asyncio.Future that can be awaited (with a timeout) or cancelled. It will "
+           "never return a result, rather the monitor results will be put in the "
+           "provided asyncio.Queue.");
 }
