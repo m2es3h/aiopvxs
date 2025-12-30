@@ -114,7 +114,7 @@ class TestClient:
         assert all(t == 'slowtask' for t in remaining_tasks)
 
 @pytest.mark.asyncio
-class TestClientCallbacks:
+class TestEventCallbacks:
 
     async def test_discover(self, pvxs_test_server : Server,
                             pvxs_test_context : Context):
@@ -135,36 +135,20 @@ class TestClientCallbacks:
         except TimeoutError:
             discover_op.cancel()
 
-    async def test_monitor_with_cb(self, pvxs_test_server : Server,
-                                   pvxs_test_context : Context):
+    async def test_monitor(self, pvxs_test_server : Server,
+                           pvxs_test_context : Context):
         server = pvxs_test_server
         client = pvxs_test_context
 
-        def cb_function(value_update):
-            _log.info("In Context.monitor() callback function")
-            assert int(value_update.value) == -42
-
-        monitor_op = client.monitor("scalar_int32", cb_function)
-        assert isinstance(monitor_op, Future)
+        monitor_op = client.monitor("scalar_int32")
+        assert isinstance(monitor_op, Subscription)
 
         try:
-            await wait_for(monitor_op, timeout=0.25)
-        except TimeoutError:
+            await wait_for(monitor_op.wait(), timeout=1.0)
+            val = monitor_op.pop()
+            assert val      # if(val) == True when type code is a Struct
+            assert int(val.value) == -42
+            val = monitor_op.pop()
+            assert not val  # if(not val) == True when type code is a Null
+        finally:
             monitor_op.cancel()
-
-    async def test_monitor_with_q(self, pvxs_test_server : Server,
-                                  pvxs_test_context : Context):
-        server = pvxs_test_server
-        client = pvxs_test_context
-
-        q = Queue()
-
-        monitor_op = client.monitor("scalar_int32", q.put_nowait)
-        assert isinstance(monitor_op, Future)
-
-        item = await wait_for(q.get(), timeout=0.25)
-        _log.info("Context.monitor() returned %s", item)
-        assert isinstance(item, Value)
-
-        monitor_op.cancel()
-        assert q.empty()
