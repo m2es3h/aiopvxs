@@ -114,6 +114,47 @@ py_future_done_handler(std::shared_ptr<T> op) {
     });
 }
 
+/*
+ * AsyncSubscription
+ *
+ * Class that pairs a pvxs::client::Subscription with an asyncio.Event. Allows
+ * calling same methods as a Subscription, but with additional methods to await
+ * on an Python asyncio.Event to suspend execution until new data is ready.
+ *
+ */
+class AsyncSubscription {
+public:
+    AsyncSubscription(std::shared_ptr<pvxs::client::Subscription> sub,
+                      py::object py_evt)
+        : sub(sub), py_evt(py_evt) {}
+
+    //~AsyncSubscription() { sub->cancel(); }
+
+    bool cancel() { return sub->cancel(); }
+    void pause()  { return sub->pause(true); }
+    void resume() { return sub->pause(false); }
+
+    const std::string name() { return sub->name(); }
+
+    pvxs::Value pop() {
+        auto val = sub->pop();
+        // clear event when subscription queue is empty
+        if (!val)
+            py_evt.attr("clear")();
+
+        return val;
+    }
+
+    py::object wait() {
+        // return asyncio.Event.wait() co-routine
+        return py_evt.attr("wait")();
+    }
+
+private:
+    std::shared_ptr<pvxs::client::Subscription> sub;
+    py::object py_evt;
+};
+
 
 void create_submodule_client(py::module_& m) {
     m.doc() = "PVAccess Client API";
@@ -145,9 +186,21 @@ void create_submodule_client(py::module_& m) {
         .def("name", &Operation::name, "Operation name")
         .def("cancel", &Operation::cancel, "Cancels a in-progress network transaction");
 
-    py::class_<Subscription, py::smart_holder>(m, "Subscription", "Represents the active event subscription")
-        .def("name", &Subscription::name, "Operation name")
-        .def("cancel", &Subscription::cancel, "Cancels an active event subscription");
+    py::class_<AsyncSubscription, py::smart_holder>(m, "Subscription", "Represents the active event subscription")
+        .def("name", &AsyncSubscription::name, "Operation name")
+        .def("cancel", &AsyncSubscription::cancel, "Cancels an active event subscription")
+        .def("pop", &AsyncSubscription::pop, "Get updated Value from subscription queue")
+        .def("wait", &AsyncSubscription::wait, "Wait for updated Value event")
+        // implement iterator protocol
+        .def("__iter__", [](const AsyncSubscription& self) { return self; })
+        .def("__next__", [](AsyncSubscription& self) {
+            // pop() items until none left, then throw StopIteration
+            auto val = self.pop();
+            if (!val)
+                throw py::stop_iteration();
+
+            return val;
+        });
 
     py::class_<Context>(m, "Context", "PVAccess protocol client")
         .def(py::init(&Context::fromEnv), "Initialise a Context with settings from Config::fromEnv()")
@@ -245,52 +298,35 @@ void create_submodule_client(py::module_& m) {
            "never return a result, rather the discover results will arrive via the provided "
            "callback function.")
 
-        .def("monitor", [](Context& self, std::string& pv_name, std::function<void(py::object)> cb) {
-            // the result of this method is an asyncio.Future,
-            // await discover(...) with a timeout
+        .def("monitor", [](Context& self, std::string& pv_name) {
+            // the result of this method is an aiopvxs.client.Subscription
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
-            py::object py_future = loop.attr("create_future")();
+            py::object py_event = py::module_::import("asyncio").attr("Event")();
 
             // make a MonitorBuilder
             auto op_builder = self.monitor(pv_name)
-                .event([cb](Subscription& sub) {
-                    Value val_update;
-
+                .event([loop, py_event](Subscription& sub) {
                     // GIL lock not automatically held in C++ callback,
-                    // acquire GIL lock when adding to python Queue
+                    // acquire GIL lock when adding to event loop
                     py::gil_scoped_acquire lock;
-                    try {
-                        val_update = sub.pop();
-                        if (val_update) {
-                            cb(py::cast(val_update));
-                        }
-                    }
-                    catch (py::cast_error& e) {
-                        py::print("Cannot cast Value to Python type in monitor callback:", e.what());
-                        throw;
-                    }
-                    catch (py::error_already_set& e) {
-                        py::print("Python exception thrown in monitor callback:", e.what());
-                        throw;
-                    }
-                    catch (Finished& fin) { cb(py::cast(fin)); }
-                    catch (Connected& con) { cb(py::cast(con)); }
-                    catch (Disconnect& dis) { cb(py::cast(dis)); }
-                    catch (RemoteError& e) { cb(py::cast(e)); }
-                    catch (std::exception& e) {
-                        py::print("C++ exception thrown in monitor callback:", e.what());
-                        cb(py::cast(e));
-                    }
+
+                    // set asyncio.Event on new data, unblocking any code
+                    // awaiting on returned subscription operation
+                    loop.attr("call_soon_threadsafe")(
+                        py::cpp_function([py_event]() {
+                            py_event.attr("set")();
+                        })
+                    );
+
+                    return;
                 });
 
-            // start the operation
-            auto op = op_builder.exec();
-            // attach done handler to the asyncio.Future (to call op.cancel() when done)
-            py_future.attr("add_done_callback")(py_future_done_handler(op));
-            // return asyncio.Future, can await with timeout or call .cancel() on it
-            return py_future;
+            // start the subscription operation
+            auto sub = op_builder.exec();
+            // attach asyncio.Event to the Subscription that is set by monitor event callback
+            auto sub_with_event = AsyncSubscription(sub, py_event);
+            // return the subscription
+            return sub_with_event;
         }, "Constructs a MonitorBuilder for the operation and executes it, returning "
-           "an asyncio.Future that can be awaited (with a timeout) or cancelled. It will "
-           "never return a result, rather the monitor results will be put in the "
-           "provided asyncio.Queue.");
+           "an aiopvxs.client.Subscription object that can be held or cancelled.");
 }

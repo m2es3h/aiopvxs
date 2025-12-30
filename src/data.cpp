@@ -81,7 +81,7 @@ void create_submodule_data(py::module_& m) {
     py::class_<Member>(m, "Member")
         .def(py::init<TypeCode::code_t, std::string>())
         .def(py::init([](TypeCode::code_t code, const std::string& name,
-                         const std::vector<Member>& children){
+                         const std::vector<Member>& children) {
             return Member(code, name, children);
         }));
 
@@ -95,11 +95,11 @@ void create_submodule_data(py::module_& m) {
     py::class_<TypeDef>(m, "TypeDef")
         .def(py::init<TypeCode::code_t>())
         .def(py::init([](TypeCode::code_t code,
-                         const std::vector<Member>& children){
+                         const std::vector<Member>& children) {
             return TypeDef(code, std::string(), children);
         }))
         .def("create", &TypeDef::create)
-        .def("__repr__", [](const TypeDef& self){
+        .def("__repr__", [](const TypeDef& self) {
             std::stringstream ss;
             ss << self;
             return ss.str();
@@ -186,15 +186,21 @@ void create_submodule_data(py::module_& m) {
 
         .def("as_bool", static_cast<bool (Value::*)(void) const>(&Value::as<bool>),
                         "Returns a python bool representation of Value")
-        .def("__bool__", static_cast<bool (Value::*)(void) const>(&Value::as<bool>),
-                         "Cast Value to python bool")
+        .def("__bool__", [](const Value& self) {
+            if (self.type().code == TypeCode::code_t::Null)
+                return false;
+            else if (self.type().code == TypeCode::code_t::Struct)
+                return true;
+            else
+                return self.as<bool>();
+        }, "Cast Value to python bool")
 
         .def("as_int", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>),
                        "Returns a python int representation of Value")
         .def("__int__", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>),
                         "Cast Value to python int")
 
-        .def("as_list", [](const Value& self){
+        .def("as_list", [](const Value& self) {
             auto sa = self.as<shared_array<const void>>();
             if (sa.original_type() == ArrayType::String)
                 return py::cast(sa);
@@ -204,7 +210,7 @@ void create_submodule_data(py::module_& m) {
                 return py::cast(sa).attr("tolist")();
         }, "Returns a python list representation of Value")
 
-        .def("as_dict", [](const Value& self){
+        .def("as_dict", [](const Value& self) {
             py::dict py_dict;
             for (auto item : self.ichildren()) {
                 auto key = py::str(self.nameOf(item));
@@ -241,15 +247,15 @@ void create_submodule_data(py::module_& m) {
                          "Returns a python array.array() representation of Value")
 
         // convenient to call these instead of .as_array().tolist()
-        .def("as_int_list", [](const Value& self){
+        .def("as_int_list", [](const Value& self) {
             py::object array_array = py::module_::import("array").attr("array");
             return array_array("q", self.as<shared_array<const void>>()).attr("tolist")();
         }, "Returns a python list[int] representation of Value")
-        .def("as_float_list", [](const Value& self){
+        .def("as_float_list", [](const Value& self) {
             py::object array_array = py::module_::import("array").attr("array");
             return array_array("d", self.as<shared_array<const void>>()).attr("tolist")();
         }, "Returns a python list[fload] representation of Value")
-        .def("as_string_list", [](const Value& self){
+        .def("as_string_list", [](const Value& self) {
             auto sa = self.as<shared_array<const void>>();
             if (sa.original_type() == ArrayType::String) {
                 return py::cast(sa);
@@ -269,7 +275,7 @@ void create_submodule_data(py::module_& m) {
                           "Returns a python string representation of Value")
 
         // string representation of values, very basic implementation, could be better
-        .def("__str__", [](const Value& self){
+        .def("__str__", [](const Value& self) {
             std::stringstream ss;
             try {
                 ss << self.as<std::string>();
@@ -278,7 +284,7 @@ void create_submodule_data(py::module_& m) {
             }
             return ss.str();
         }, "Cast Value to python string")
-        .def("__repr__", [](const Value& self){
+        .def("__repr__", [](const Value& self) {
             std::stringstream ss;
             ss << self;
             return ss.str();
