@@ -138,13 +138,17 @@ public:
 
     pvxs::Value pop() {
         auto val = sub->pop();
+        // clear event when subscription queue is empty
         if (!val)
             py_evt.attr("clear")();
 
         return val;
     }
 
-    py::object wait() { return py_evt.attr("wait")(); }
+    py::object wait() {
+        // return asyncio.Event.wait() co-routine
+        return py_evt.attr("wait")();
+    }
 
 private:
     std::shared_ptr<pvxs::client::Subscription> sub;
@@ -186,7 +190,17 @@ void create_submodule_client(py::module_& m) {
         .def("name", &AsyncSubscription::name, "Operation name")
         .def("cancel", &AsyncSubscription::cancel, "Cancels an active event subscription")
         .def("pop", &AsyncSubscription::pop, "Get updated Value from subscription queue")
-        .def("wait", &AsyncSubscription::wait, "Wait for updated Value event");
+        .def("wait", &AsyncSubscription::wait, "Wait for updated Value event")
+        // implement iterator protocol
+        .def("__iter__", [](const AsyncSubscription& self) { return self; })
+        .def("__next__", [](AsyncSubscription& self) {
+            // pop() items until none left, then throw StopIteration
+            auto val = self.pop();
+            if (!val)
+                throw py::stop_iteration();
+
+            return val;
+        });
 
     py::class_<Context>(m, "Context", "PVAccess protocol client")
         .def(py::init(&Context::fromEnv), "Initialise a Context with settings from Config::fromEnv()")
@@ -296,13 +310,11 @@ void create_submodule_client(py::module_& m) {
                     // acquire GIL lock when adding to event loop
                     py::gil_scoped_acquire lock;
 
-                    py::print("IN EVENT CALLBACK");
                     // set asyncio.Event on new data, unblocking any code
                     // awaiting on returned subscription operation
                     loop.attr("call_soon_threadsafe")(
                         py::cpp_function([py_event]() {
                             py_event.attr("set")();
-                            py::print("EVENT SET");
                         })
                     );
 

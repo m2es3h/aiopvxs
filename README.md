@@ -148,32 +148,33 @@ finally:
     assert put_op.done()
 ```
 
-client.Context.monitor() wraps a pvxs::client::Subscription() in an
-asyncio.Future(). Keep the reference to the Future object or wait with
-a timeout to keep the subscription alive for a specified amount of time.
+Calling client.Context.monitor() sets up an asyncio.Event in its callback and
+returns a pvxs::client::Subscription() that holds a reference to that Event.
+You can then ``await Subscription.wait()`` to block until there are new values
+ready to pop. Iterating over the subscription object pops the received values
+in the subscription's internal queue. Keep the reference to the Subscription
+object to keep the subscription alive.
 
 ```python
 import asyncio
 
-from aiopvxs.client import Context
+from aiopvxs.client import Context, Subscription
 
 # instantiate new client Context
 client_ctx = Context()
 
-# define a callback function
-# alternatively, define q = asyncio.Queue() and use q.put_nowait() as callback
-def cb_function(value_update):
-    print("In Context.monitor() callback function")
-    print("Value is", value_update.value)
-
 async def main():
-    monitor_op = client_ctx.monitor("scalar_int32", cb_function)
-    assert isinstance(monitor_op, Future)
+    # subscribe to changes in scalar_int32 PV
+    monitor_sub = client_ctx.monitor("scalar_int32")
+    assert isinstance(monitor_op, Subscription)
 
-    try:
-        await wait_for(monitor_op, timeout=10.0)
-    except TimeoutError:
-        pass  # the timeout calls monitor_op.cancel()
+    # wait for at least one update
+    await monitor_sub.wait()
+    # pop all value updates
+    for val in monitor_sub:
+        print("Value is", val)
+    # unsubscribe
+    monitor_sub.cancel()
 
 asyncio.run(main())
 ```
