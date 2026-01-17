@@ -26,6 +26,10 @@
 namespace py = pybind11;
 using namespace pvxs;
 
+namespace pybind11 {
+    PYBIND11_RUNTIME_EXCEPTION(stop_async_iteration, PyExc_StopAsyncIteration)
+}
+
 template <typename T>
 bool make_shared_array(const py::buffer_info& info, shared_array<const void>& sa) {
     auto arr_begin = static_cast<const T*>(info.ptr);
