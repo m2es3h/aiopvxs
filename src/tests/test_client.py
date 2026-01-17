@@ -144,11 +144,15 @@ class TestEventCallbacks:
         assert isinstance(monitor_op, Subscription)
 
         try:
-            await wait_for(monitor_op.wait(), timeout=1.0)
-            val = monitor_op.pop()
-            assert val      # if(val) == True when type code is a Struct
-            assert int(val.value) == -42
-            val = monitor_op.pop()
-            assert not val  # if(not val) == True when type code is a Null
+            next_val = -42
+            async for val in monitor_op:
+                # test that type code Null is never returned
+                assert val  # if(val) == True when type code is a Struct
+                assert val.value.as_int() == next_val
+                if val.value.as_int() >= 0:
+                    break
+                else:
+                    next_val += 1. # count up towards zero
+                    await client.put("scalar_int32", {'value': next_val})
         finally:
             monitor_op.cancel()

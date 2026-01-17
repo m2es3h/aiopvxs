@@ -117,16 +117,16 @@ py_future_done_handler(std::shared_ptr<T> op) {
 /*
  * AsyncSubscription
  *
- * Class that pairs a pvxs::client::Subscription with an asyncio.Event. Allows
+ * Class that pairs a pvxs::client::Subscription with an asyncio.Queue. Allows
  * calling same methods as a Subscription, but with additional methods to await
- * on an Python asyncio.Event to suspend execution until new data is ready.
+ * on asyncio.Queue.get() to suspend execution until new data is ready.
  *
  */
 class AsyncSubscription {
 public:
     AsyncSubscription(std::shared_ptr<pvxs::client::Subscription> sub,
-                      py::object py_evt)
-        : sub(sub), py_evt(py_evt) {}
+                      py::object py_queue)
+        : sub(sub), py_queue(py_queue) {}
 
     //~AsyncSubscription() { sub->cancel(); }
 
@@ -136,23 +136,42 @@ public:
 
     const std::string name() { return sub->name(); }
 
-    pvxs::Value pop() {
-        auto val = sub->pop();
-        // clear event when subscription queue is empty
-        if (!val)
-            py_evt.attr("clear")();
+    py::object pop() {
+        py::object val;
 
-        return val;
+        try {
+            auto val = sub->pop();
+            if (val)
+                py_queue.attr("put_nowait")(py::cast(val));
+        }
+        catch (pvxs::client::Finished& fin) {
+            py_queue.attr("put_nowait")(py::cast(fin));
+        }
+        catch (pvxs::client::Connected& con) {
+            py_queue.attr("put_nowait")(py::cast(con));
+        }
+        catch (pvxs::client::Disconnect& dis) {
+            py_queue.attr("put_nowait")(py::cast(dis));
+        }
+        catch (pvxs::client::RemoteError& err) {
+            py_queue.attr("put_nowait")(py::cast(err));
+        }
+        catch (std::exception& exc) {
+            py::print("C++ exception thrown in monitor callback:", exc.what());
+            py_queue.attr("put_nowait")(py::cast(exc));
+        }
+
+        return py_queue.attr("get")();
     }
 
-    py::object wait() {
-        // return asyncio.Event.wait() co-routine
-        return py_evt.attr("wait")();
+    py::object get() {
+        // return asyncio.Queue.get() co-routine
+        return this->pop();
     }
 
 private:
     std::shared_ptr<pvxs::client::Subscription> sub;
-    py::object py_evt;
+    py::object py_queue;
 };
 
 
@@ -163,7 +182,6 @@ void create_submodule_client(py::module_& m) {
     using namespace pvxs::client;
 
     py::register_exception<RemoteError>(m, "RemoteError", PyExc_RuntimeError);
-
     py::register_exception<Connected>(m, "Connected", PyExc_RuntimeError);
     py::register_exception<Disconnect>(m, "Disconnected", PyExc_RuntimeError);
     py::register_exception<Finished>(m, "Finished", PyExc_RuntimeError);
@@ -190,14 +208,14 @@ void create_submodule_client(py::module_& m) {
         .def("name", &AsyncSubscription::name, "Operation name")
         .def("cancel", &AsyncSubscription::cancel, "Cancels an active event subscription")
         .def("pop", &AsyncSubscription::pop, "Get updated Value from subscription queue")
-        .def("wait", &AsyncSubscription::wait, "Wait for updated Value event")
+        .def("get", &AsyncSubscription::get, "Get updated Value from subscription queue (alias for pop())")
         // implement iterator protocol
-        .def("__iter__", [](const AsyncSubscription& self) { return self; })
-        .def("__next__", [](AsyncSubscription& self) {
-            // pop() items until none left, then throw StopIteration
+        .def("__aiter__", [](const AsyncSubscription& self) { return self; })
+        .def("__anext__", [](AsyncSubscription& self) {
+            // pop() items until some exit condition, then throw StopIteration
             auto val = self.pop();
-            if (!val)
-                throw py::stop_iteration();
+            //if (!val)
+            //    throw py::stop_async_iteration();
 
             return val;
         });
@@ -301,22 +319,44 @@ void create_submodule_client(py::module_& m) {
         .def("monitor", [](Context& self, std::string& pv_name) {
             // the result of this method is an aiopvxs.client.Subscription
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
-            py::object py_event = py::module_::import("asyncio").attr("Event")();
+            py::object py_queue = py::module_::import("asyncio").attr("Queue")();
 
             // make a MonitorBuilder
             auto op_builder = self.monitor(pv_name)
-                .event([loop, py_event](Subscription& sub) {
+                .event([loop, py_queue](Subscription& sub) {
                     // GIL lock not automatically held in C++ callback,
                     // acquire GIL lock when adding to event loop
                     py::gil_scoped_acquire lock;
+                    py::object val;
 
-                    // set asyncio.Event on new data, unblocking any code
-                    // awaiting on returned subscription operation
+                    try {
+                        // there is always something available if this callback
+                        // was called, get it or trigger exception
+                        val = py::cast(sub.pop());
+                    }
+                    catch (Finished& fin) { val = py::cast(fin); }
+                    catch (Connected& con) { val = py::cast(con); }
+                    catch (Disconnect& dis) { val = py::cast(dis); }
+                    catch (RemoteError& rem) { val = py::cast(rem); }
+                    catch (std::exception& exc) {
+                        py::print("C++ exception thrown in monitor callback:", exc.what());
+                        val = py::cast(exc);
+                    }
+                    // put new data into python asyncio.Queue, unblocking any code
+                    // awaiting on new data
+                    py::object run_coro_ts = py::module_::import("asyncio").attr("run_coroutine_threadsafe");
+                    auto fut = run_coro_ts(py_queue.attr("put")(val), loop);
+                    fut.attr("result")();
+
+                    /*py_queue.attr("put_nowait")(val);
+                    py::print("done CALLBACK");
                     loop.attr("call_soon_threadsafe")(
-                        py::cpp_function([py_event]() {
-                            py_event.attr("set")();
+                        py::cpp_function([py_queue, upd = std::move(val)]() {
+                            py::print("in CALLBACK");
+                            py_queue.attr("put_nowait")(upd);
+                            py::print("done CALLBACK");
                         })
-                    );
+                    );*/
 
                     return;
                 });
@@ -324,9 +364,10 @@ void create_submodule_client(py::module_& m) {
             // start the subscription operation
             auto sub = op_builder.exec();
             // attach asyncio.Event to the Subscription that is set by monitor event callback
-            auto sub_with_event = AsyncSubscription(sub, py_event);
+            auto sub_with_event = AsyncSubscription(sub, py_queue);
             // return the subscription
             return sub_with_event;
         }, "Constructs a MonitorBuilder for the operation and executes it, returning "
-           "an aiopvxs.client.Subscription object that can be held or cancelled.");
+           "an aiopvxs.client.Subscription object that can be iterated with an async "
+           "for loop or cancelled.");
 }
