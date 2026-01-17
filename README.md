@@ -157,7 +157,8 @@ reference to the Subscription object to keep the subscription alive.
 ```python
 import asyncio
 
-from aiopvxs.client import Context, Subscription
+from aiopvxs.client import Context, Disconnected, Subscription
+from aiopvxs.data import Value
 
 # instantiate new client Context
 client_ctx = Context()
@@ -167,11 +168,15 @@ async def main():
     monitor_sub = client_ctx.monitor("scalar_int32")
     assert isinstance(monitor_op, Subscription)
 
-    # print out value updates until some condition is reached
+    # print out value updates as they arrive 
+    # until some condition is reached
     async for val in monitor_sub:
-        print("Value is", val.value.as_int())
-        if (val.value.as_int() < 0):
+        if isinstance(val, Disconnected):
             break
+        elif not isinstance(val, Value):
+            continue
+        else:
+            print("Value is now", val.value.as_int())
 
     # unsubscribe
     monitor_sub.cancel()
