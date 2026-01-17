@@ -47,7 +47,7 @@ pvxs_result_handler(py::object loop, py::object py_future) {
         py::gil_scoped_acquire lock;
         try {
             // test result for value or exception
-            pvxs::Value value = pvxs::Value(result());
+            pvxs::Value value = result();
             // if value, schedule asyncio.Future.set_result(value)
             // call on the event loop
             loop.attr("call_soon_threadsafe")(
@@ -144,19 +144,19 @@ public:
             if (val)
                 py_queue.attr("put_nowait")(py::cast(val));
         }
-        catch (pvxs::client::Finished& fin) {
+        catch (const pvxs::client::Finished& fin) {
             py_queue.attr("put_nowait")(py::cast(fin));
         }
-        catch (pvxs::client::Connected& con) {
+        catch (const pvxs::client::Connected& con) {
             py_queue.attr("put_nowait")(py::cast(con));
         }
-        catch (pvxs::client::Disconnect& dis) {
+        catch (const pvxs::client::Disconnect& dis) {
             py_queue.attr("put_nowait")(py::cast(dis));
         }
-        catch (pvxs::client::RemoteError& err) {
+        catch (const pvxs::client::RemoteError& err) {
             py_queue.attr("put_nowait")(py::cast(err));
         }
-        catch (std::exception& exc) {
+        catch (const std::exception& exc) {
             py::print("C++ exception thrown in monitor callback:", exc.what());
             py_queue.attr("put_nowait")(py::cast(exc));
         }
@@ -181,10 +181,19 @@ void create_submodule_client(py::module_& m) {
     using namespace pvxs;
     using namespace pvxs::client;
 
-    py::register_exception<RemoteError>(m, "RemoteError", PyExc_RuntimeError);
-    py::register_exception<Connected>(m, "Connected", PyExc_RuntimeError);
-    py::register_exception<Disconnect>(m, "Disconnected", PyExc_RuntimeError);
-    py::register_exception<Finished>(m, "Finished", PyExc_RuntimeError);
+    //py::register_exception<RemoteError>(m, "RemoteError", PyExc_RuntimeError);
+    //py::register_exception<Connected>(m, "Connected", PyExc_RuntimeError);
+    //py::register_exception<Disconnect>(m, "Disconnected", PyExc_RuntimeError);
+    //py::register_exception<Finished>(m, "Finished", PyExc_RuntimeError);
+
+    py::class_<RemoteError>(m, "RemoteError", "")
+        .def(py::init<const std::string&>());
+    py::class_<Connected>(m, "Connected", "")
+        .def(py::init<const std::string&>());
+    py::class_<Disconnect>(m, "Disconnected", "")
+        .def(py::init<>());
+    py::class_<Finished>(m, "Finished", "")
+        .def(py::init<>());
 
     py::native_enum<Discovered::event_t>(m, "EventTypeEnum", "enum.IntEnum")
         .value("Online", Discovered::event_t::Online)
@@ -334,29 +343,21 @@ void create_submodule_client(py::module_& m) {
                         // was called, get it or trigger exception
                         val = py::cast(sub.pop());
                     }
-                    catch (Finished& fin) { val = py::cast(fin); }
-                    catch (Connected& con) { val = py::cast(con); }
-                    catch (Disconnect& dis) { val = py::cast(dis); }
-                    catch (RemoteError& rem) { val = py::cast(rem); }
-                    catch (std::exception& exc) {
+                    catch (const Finished& fin) { val = py::cast(fin); }
+                    catch (const Connected& con) { val = py::cast(con); }
+                    catch (const Disconnect& dis) { val = py::cast(dis); }
+                    catch (const RemoteError& rem) { val = py::cast(rem); }
+                    catch (const std::exception& exc) {
                         py::print("C++ exception thrown in monitor callback:", exc.what());
                         val = py::cast(exc);
                     }
-                    // put new data into python asyncio.Queue, unblocking any code
-                    // awaiting on new data
-                    py::object run_coro_ts = py::module_::import("asyncio").attr("run_coroutine_threadsafe");
-                    auto fut = run_coro_ts(py_queue.attr("put")(val), loop);
-                    fut.attr("result")();
 
-                    /*py_queue.attr("put_nowait")(val);
-                    py::print("done CALLBACK");
+                    // put new data into python queue, unblocks any waiting q.get() calls
                     loop.attr("call_soon_threadsafe")(
-                        py::cpp_function([py_queue, upd = std::move(val)]() {
-                            py::print("in CALLBACK");
-                            py_queue.attr("put_nowait")(upd);
-                            py::print("done CALLBACK");
+                        py::cpp_function([py_queue, val]() {
+                            py_queue.attr("put_nowait")(val);
                         })
-                    );*/
+                    );
 
                     return;
                 });
