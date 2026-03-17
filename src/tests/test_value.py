@@ -20,6 +20,7 @@ class TestValueCasts:
         assert bool(nt_value.value) == bool(py_value)
         assert int(nt_value.value) == int(py_value)
         assert float(nt_value.value) == pytest.approx(float(py_value))
+        assert nt_value.value.as_py() == py_value
 
     def test_float_types(self, nt_float_scalars : tuple):
         nt_type, _, py_value = nt_float_scalars
@@ -34,6 +35,7 @@ class TestValueCasts:
             assert str(nt_value.value) == str(round(py_value, 4))
         else:
             assert str(nt_value.value) == str(py_value)
+            assert nt_value.value.as_py() == py_value
 
     def test_string_type(self):
         test_string = "Hello, 👋"
@@ -41,6 +43,7 @@ class TestValueCasts:
         nt_value = NTScalar(T.String).create()
         nt_value['value'] = test_string
         assert str(nt_value.value) == test_string
+        assert nt_value.value.as_py() == test_string
 
     @pytest.mark.parametrize('nt_boolean_scalars', [
         (NTScalar(T.Bool), False),
@@ -56,6 +59,7 @@ class TestValueCasts:
         nt_value['value'] = py_value
         assert bool(nt_value.value) == bool(py_value)
         assert int(nt_value.value) == int(py_value)
+        assert nt_value.value.as_py() == py_value
         # pvxs returns "true/false" all lowercase
         assert str(nt_value.value) == str(py_value).lower()
 
@@ -75,7 +79,9 @@ class TestValueCasts:
         nt_value = nt_type.create()
         nt_value['value'] = py_value
         assert nt_value.value.index.as_int() == py_value['index']
+        assert nt_value.value.index.as_py() == py_value['index']
         assert nt_value.value.choices.as_string_list() == py_value['choices']
+        assert nt_value.value.choices.as_py() == py_value['choices']
 
     def test_array_of_ints(self, nt_integer_arrays : tuple):
         nt_type, pyarray_type, py_value = nt_integer_arrays
@@ -86,6 +92,7 @@ class TestValueCasts:
         assert nt_value.value.as_list() == py_value
         assert nt_value.value.as_int_list() == py_value
         assert nt_value.value.as_float_list() == [float(x) for x in py_value]
+        assert nt_value.value.as_py() == py_value
 
     def test_sequence_of_ints(self, nt_integer_arrays : tuple):
         nt_type, _, py_value = nt_integer_arrays
@@ -96,6 +103,7 @@ class TestValueCasts:
         assert nt_value.value.as_list() == py_value
         assert nt_value.value.as_int_list() == py_value
         assert nt_value.value.as_float_list() == [float(x) for x in py_value]
+        assert nt_value.value.as_py() == py_value
 
     def test_array_of_floats(self, nt_float_arrays : tuple):
         nt_type, pyarray_type, py_value = nt_float_arrays
@@ -111,6 +119,7 @@ class TestValueCasts:
         else:
             assert nt_value.value.as_list() == py_value
             assert nt_value.value.as_float_list() == py_value
+            assert nt_value.value.as_py() == py_value
 
         with pytest.raises(TypeError, match="'float' object cannot be interpreted as an integer"):
             assert nt_value.value.as_int_list() == [int(x) for x in py_value]
@@ -129,6 +138,7 @@ class TestValueCasts:
         else:
             assert nt_value.value.as_list() == py_value
             assert nt_value.value.as_float_list() == py_value
+            assert nt_value.value.as_py() == py_value
 
         with pytest.raises(TypeError, match="'float' object cannot be interpreted as an integer"):
             assert nt_value.value.as_int_list() == [int(x) for x in py_value]
@@ -140,15 +150,18 @@ class TestValueCasts:
         nt_value['value'] = test_strings
         assert nt_value.value.as_list() == test_strings
         assert nt_value.value.as_string_list() == test_strings
+        assert nt_value.value.as_py() == test_strings
 
     def test_dictionary(self, nt_enum_init_dict):
         test_dict = nt_enum_init_dict
         nt_value = NTEnum().create()
         nt_value.assign(test_dict)
 
+        # >= operator on dictionary items tests for d1 is superset of d2
         assert nt_value.value.as_dict().items() >= test_dict['value'].items()
         assert nt_value.display.as_dict().items() >= test_dict['display'].items()
         assert nt_value.timeStamp.as_dict().items() >= test_dict['timeStamp'].items()
+        assert nt_value.value.as_py() == test_dict['value']
 
 
 class TestValueOps:
@@ -171,3 +184,23 @@ class TestValueOps:
             assert isinstance(item, Value)
             for inner_item in item:
                 assert isinstance(inner_item, Value)
+
+    def test_value_equality(self, nt_enum_init_dict):
+        test_dict = nt_enum_init_dict
+        nt_value1 = NTEnum().create()
+        nt_value1.assign(test_dict)
+        nt_value2 = NTEnum().create()
+        nt_value2.assign(test_dict)
+        # value2 has one different value
+        nt_value2.timeStamp.nanoseconds = 0
+
+        assert nt_value1.equalInst(nt_value1)
+        assert not nt_value1.equalInst(nt_value2)
+
+        assert nt_value1.equalType(nt_value1)
+        assert nt_value1.equalType(nt_value2)
+
+        assert nt_value1 == nt_value1
+        assert nt_value1.as_dict() == nt_value1.as_dict()
+        assert nt_value1 != nt_value2
+        assert nt_value1.as_dict() != nt_value2.as_dict()

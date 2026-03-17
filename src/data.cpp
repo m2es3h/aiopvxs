@@ -115,6 +115,18 @@ void create_submodule_data(py::module_& m) {
         .def("cloneEmpty", &Value::cloneEmpty,
                            "Return empty-initialised Value with same TypeDef")
 
+        .def("equalInst", &Value::equalInst,
+                          "Test for instance equality (ie: this==this)")
+        .def("equalType", &Value::equalType,
+                          "Test for type and field name equality")
+
+        .def("__eq__", [](const Value& self, const Value& other){
+            return py::cast(self).attr("as_dict")().attr("__eq__")(py::cast(other).attr("as_dict")());
+        }, "Test for value equality (dictionary representation is equal)")
+        .def("__ne__", [](const Value& self, const Value& other){
+            return py::cast(self).attr("as_dict")().attr("__ne__")(py::cast(other).attr("as_dict")());
+        }, "Test for value inequality (dictionary representation is not equal)")
+
         .def("__iter__", [](const Value& self) {
             return py::make_iterator(self.ichildren().begin(), self.ichildren().end());
         }, py::keep_alive<0, 1>(), "Iterate through outer-most fields in Value")
@@ -210,6 +222,29 @@ void create_submodule_data(py::module_& m) {
                 return py::cast(sa).attr("tolist")();
         }, "Returns a python list representation of Value")
 
+        .def("as_py", [](const Value& self) {
+            if (self.nmembers() > 0) {
+                return py::cast(self).attr("as_dict")();
+            }
+            else {
+                switch(self.storageType()) {
+                    case StoreType::Bool:
+                        return py::cast(self.as<bool>());
+                    case StoreType::UInteger:
+                    case StoreType::Integer:
+                        return py::cast(self.as<int64_t>());
+                    case StoreType::Real:
+                        return py::cast(self.as<double>());
+                    case StoreType::String:
+                        return py::cast(self.as<std::string>());
+                    case StoreType::Array:
+                        return py::cast(self).attr("as_list")();
+                    default:
+                        return py::cast(self);
+                }
+            }
+        }, "Returns the equivalent python type representation of Value")
+
         .def("as_dict", [](const Value& self) {
             py::dict py_dict;
             for (auto item : self.ichildren()) {
@@ -254,7 +289,7 @@ void create_submodule_data(py::module_& m) {
         .def("as_float_list", [](const Value& self) {
             py::object array_array = py::module_::import("array").attr("array");
             return array_array("d", self.as<shared_array<const void>>()).attr("tolist")();
-        }, "Returns a python list[fload] representation of Value")
+        }, "Returns a python list[float] representation of Value")
         .def("as_string_list", [](const Value& self) {
             auto sa = self.as<shared_array<const void>>();
             if (sa.original_type() == ArrayType::String) {
