@@ -252,12 +252,10 @@ Python value of a field can be unwrapped using Python builtins such as
 ```pycon
 >>> from aiopvxs.data import Value
 >>> Value.
-Value.as_array(        Value.as_int_list(     Value.get(
-Value.as_bool(         Value.as_list(         Value.id(
-Value.as_dict(         Value.as_string(       Value.mro()
-Value.as_float(        Value.as_string_list(  Value.storageType(
-Value.as_float_list(   Value.assign(          Value.type(
-Value.as_int(          Value.cloneEmpty(
+Value.as_array(   Value.as_float_list(   Value.as_py(            Value.cloneEmpty(   Value.id(
+Value.as_bool(    Value.as_int(          Value.as_string(        Value.equalInst(    Value.mro()
+Value.as_dict(    Value.as_int_list(     Value.as_string_list(   Value.equalType(    Value.storageType(
+Value.as_float(   Value.as_list(         Value.assign(           Value.get(          Value.type(
 ```
 
 Incompatible conversions will raise the underlying aiopvxs.data.NoConvert
