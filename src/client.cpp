@@ -253,7 +253,7 @@ void create_submodule_client(py::module_& m) {
         }, "Constructs a GetBuilder for the operation and executes it, returning "
            "an asyncio.Future representing the future result of the operation")
 
-        .def("put", [](Context& self, std::string& pv_name, py::dict new_data) {
+        .def("put", [](Context& self, std::string& pv_name, py::object new_data) {
             // the result of this method is an asyncio.Future, so put() can be
             // treated like a co-routine (must await put(...) to retrieve the result)
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
@@ -297,10 +297,39 @@ void create_submodule_client(py::module_& m) {
             py_future.attr("add_done_callback")(py_future_done_handler(op));
             // return asyncio.Future representing the future result of the operation
             return py_future;
-        // the py::keep_alive means the 3rd argument (py::dict new_data) must live at least as long
+        // the py::keep_alive means the 3rd argument (py::object new_data) must live at least as long
         // as the return value, otherwise new_data might get cleaned up before .build() callback
         }, py::keep_alive<0, 3>(), "Constructs a PutBuilder for the operation and executes it, returning "
                                    "an asyncio.Future representing the future result of the operation")
+
+        .def("rpc", [](Context& self, std::string& pv_name, py::kwargs kwargs) {
+            // the result of this method is an asyncio.Future, so rpc() can be
+            // treated like a co-routine (must await rpc(...) to retrieve the result)
+            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
+            py::object py_future = loop.attr("create_future")();
+
+            // make an RPCBuilder with result callback that assigns the result of the
+            // operation to an asyncio.Future (using either set_result() or set_exception())
+            auto op_builder = self.rpc(pv_name)
+                .result(pvxs_result_handler(loop, py_future));
+            // add each keyword argument as rpc call argument
+            for (auto item : kwargs) {
+                if (py::isinstance<py::int_>(item.second))
+                    op_builder = op_builder.arg(item.first.cast<std::string>(), item.second.cast<int64_t>());
+                else if (py::isinstance<py::float_>(item.second))
+                    op_builder = op_builder.arg(item.first.cast<std::string>(), item.second.cast<double>());
+                else
+                    op_builder = op_builder.arg(item.first.cast<std::string>(), item.second.cast<std::string>());
+            }
+
+            // start the operation
+            auto op = op_builder.exec();
+            // attach done handler to the asyncio.Future so the operation continues until completion
+            py_future.attr("add_done_callback")(py_future_done_handler(op));
+            // return asyncio.Future representing the future result of the operation
+            return py_future;
+        }, "Constructs an RPCBuilder for the operation and executes it, returning "
+           "an asyncio.Future representing the future result of the operation")
 
         .def("discover", [](Context& self, std::function<void(const Discovered&)> cb, bool do_ping) {
             // the result of this method is an asyncio.Future,

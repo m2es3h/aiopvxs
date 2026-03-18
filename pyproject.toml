@@ -20,7 +20,7 @@ description = "Python asyncio API to the PVXS libraries"
 readme = "README.md"
 dependencies = [
     "pybind11==3.0",
-    "pvxslibs==1.4",
+    "pvxslibs==1.5.1",
     "epicscorelibs>=7.0",
 ]
 
