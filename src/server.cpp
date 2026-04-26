@@ -20,6 +20,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/functional.h>
 
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
@@ -32,6 +33,11 @@ void create_submodule_server(py::module_& m) {
 
     using namespace pvxs;
     using namespace pvxs::server;
+
+    py::class_<ExecOp>(m, "ExecOp", "Handle for server-side operation on a PV.")
+        .def("reply", static_cast<void (ExecOp::*)()>(&ExecOp::reply), "Issue a reply without data")
+        .def("reply", static_cast<void (ExecOp::*)(const Value&)>(&ExecOp::reply), "Issue a reply with data")
+        .def("error", &ExecOp::error, "Indicate the request has resulted in an error");
 
     py::class_<StaticSource>(m, "StaticSource", "Associate SharedPV instances with a name")
 
@@ -72,7 +78,11 @@ void create_submodule_server(py::module_& m) {
  
         // class methods
         .def("open", &SharedPV::open, "Infer data type from initial value to SharedPV")
-        .def("close", &SharedPV::close, "Disconnects any active clients of SharedPV");
+        .def("close", &SharedPV::close, "Disconnects any active clients of SharedPV")
+        .def("post", &SharedPV::post, "Update the cached value of SharedPV")
+
+        .def("onPut", &SharedPV::onPut, "Install a custom callback function for PUT operations on this PV.")
+        .def("onRPC", &SharedPV::onRPC, "Install a custom callback function for RPC operations on this PV.");
 
     py::class_<Server>(m, "Server", "PVAccess protocol server")
 

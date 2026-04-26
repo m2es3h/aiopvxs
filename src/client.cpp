@@ -78,8 +78,17 @@ pvxs_result_handler(py::object loop, py::object py_future) {
                 })
             );
         }
-        catch (const std::exception& e) {
+        catch (const py::value_error& e) {
             py::object py_exc = py::module_::import("builtins").attr("ValueError")(e.what());
+
+            loop.attr("call_soon_threadsafe")(
+                py::cpp_function([py_future, py_exc]() {
+                    py_future.attr("set_exception")(py_exc);
+                })
+            );
+        }
+        catch (const std::exception& e) {
+            py::object py_exc = py::module_::import("builtins").attr("RuntimeError")(e.what());
 
             loop.attr("call_soon_threadsafe")(
                 py::cpp_function([py_future, py_exc]() {
