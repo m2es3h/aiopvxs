@@ -35,8 +35,8 @@ class TestClientRPC:
         with pytest.raises(CancelledError) as exc_info:
             val = await rpc_op
 
-    async def test_rpc_execute(self, pvxs_test_server : Server,
-                               pvxs_test_context : Context):
+    async def test_rpc_execute_no_args(self, pvxs_test_server : Server,
+                                       pvxs_test_context : Context):
         server = pvxs_test_server
         client = pvxs_test_context
 
@@ -45,6 +45,21 @@ class TestClientRPC:
         val = await rpc_op
         assert isinstance(val, Value)
         assert val.type().code == T.Null
+
+    async def test_rpc_execute_with_args(self, pvxs_test_server : Server,
+                                         pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        rpc_op = client.rpc("scalar_string", some_float=999.9,
+                                             some_string="a string")
+        assert isinstance(rpc_op, Future)
+        val = await rpc_op
+        assert isinstance(val, Value)
+        # pvxs_test_server has RPC handler that returns RPC query args
+        assert 'query' in val.as_dict()
+        assert float(val.query.some_float) == 999.9
+        assert str(val.query.some_string) == "a string"
 
 
 @pytest.mark.asyncio

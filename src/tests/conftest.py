@@ -26,7 +26,7 @@ async def pvxs_test_server() -> AsyncGenerator[Server]:
         op.reply()
 
     def rpc_callback(pv, op, value):
-        op.reply()
+        op.reply(value)
 
     val = NTScalar(T.String).create()
     val['value'] = "minus forty-two"
