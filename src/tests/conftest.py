@@ -21,7 +21,21 @@ async def pvxs_test_server() -> AsyncGenerator[Server]:
     pv_int32 = SharedPV()
     pv_int32.open(val)
 
-    with Server({"scalar_int32": pv_int32}) as server:
+    def put_callback(pv, op, value):
+        pv.post(value)
+        op.reply()
+
+    def rpc_callback(pv, op, value):
+        op.reply(value)
+
+    val = NTScalar(T.String).create()
+    val['value'] = "minus forty-two"
+    pv_str = SharedPV()
+    pv_str.onPut(put_callback)
+    pv_str.onRPC(rpc_callback)
+    pv_str.open(val)
+
+    with Server({"scalar_int32": pv_int32, "scalar_string": pv_str}) as server:
         yield server
 
     pv_int32.close()

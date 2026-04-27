@@ -4,7 +4,8 @@ from asyncio import (CancelledError, Future, Queue, all_tasks, create_task,
 
 import pytest
 
-from aiopvxs.client import Context, Disconnected, Discovered, Subscription
+from aiopvxs.client import (Context, Disconnected, Discovered, RemoteError,
+                            Subscription)
 from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.data import Value
 from aiopvxs.server import Server
@@ -13,14 +14,63 @@ _log = logging.getLogger(__file__)
 
 
 @pytest.mark.asyncio
-class TestClient:
+class TestClientRPC:
+
+    async def test_rpc_no_impl(self, pvxs_test_server : Server,
+                               pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        rpc_op = client.rpc("scalar_int32")
+        assert isinstance(rpc_op, Future)
+        with pytest.raises(RuntimeError) as exc_info:
+            val = await rpc_op
+
+    async def test_rpc_cancel(self, pvxs_test_context : Context):
+        client = pvxs_test_context
+
+        rpc_op = client.rpc("nonexistent")
+        rpc_op.cancel()
+
+        with pytest.raises(CancelledError) as exc_info:
+            val = await rpc_op
+
+    async def test_rpc_execute_no_args(self, pvxs_test_server : Server,
+                                       pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        rpc_op = client.rpc("scalar_string")
+        assert isinstance(rpc_op, Future)
+        val = await rpc_op
+        assert isinstance(val, Value)
+        assert val.type().code == T.Null
+
+    async def test_rpc_execute_with_args(self, pvxs_test_server : Server,
+                                         pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        rpc_op = client.rpc("scalar_string", some_float=999.9,
+                                             some_string="a string")
+        assert isinstance(rpc_op, Future)
+        val = await rpc_op
+        assert isinstance(val, Value)
+        # pvxs_test_server has RPC handler that returns RPC query args
+        assert 'query' in val.as_dict()
+        assert float(val.query.some_float) == 999.9
+        assert str(val.query.some_string) == "a string"
+
+
+@pytest.mark.asyncio
+class TestClientGetPut:
 
     async def test_get_value(self, pvxs_test_server : Server,
                        pvxs_test_context : Context):
         server = pvxs_test_server
         client = pvxs_test_context
 
-        get_op =  client.get("scalar_int32")
+        get_op = client.get("scalar_int32")
         assert isinstance(get_op, Future)
         val = await get_op
         assert isinstance(val, Value)
@@ -35,14 +85,14 @@ class TestClient:
         server = pvxs_test_server
         client = pvxs_test_context
 
-        put_op =  client.put("scalar_int32", {'value': 999, 'alarm.message': "OK"})
+        put_op = client.put("scalar_string", {'value': "minus forty-three", 'alarm.message': "OK"})
         assert isinstance(put_op, Future)
         val = await put_op
         assert isinstance(val, Value)
         assert val.type().code == T.Null
 
-        val = await client.get("scalar_int32")
-        assert int(val.value) == 999
+        val = await client.get("scalar_string")
+        assert str(val.value) == "minus forty-three"
         assert str(val.alarm.message) == "OK"
 
     async def test_get_cancel(self, pvxs_test_context : Context):
@@ -112,6 +162,7 @@ class TestClient:
         remaining_tasks = list(t.get_name() for t in all_tasks() if t != current_task())
         await gather(*other_tasks)
         assert all(t == 'slowtask' for t in remaining_tasks)
+
 
 @pytest.mark.asyncio
 class TestEventCallbacks:
