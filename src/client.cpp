@@ -340,7 +340,28 @@ void create_submodule_client(py::module_& m) {
         }, "Constructs an RPCBuilder for the operation and executes it, returning "
            "an asyncio.Future representing the future result of the operation")
 
-        .def("discover", [](Context& self, std::function<void(const Discovered&)> cb, bool do_ping) {
+        .def("list", [](Context& self, std::string& server_name) {
+            // list is an RPC call with a special set of operations/arguments
+            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
+            py::object py_future = loop.attr("create_future")();
+
+            // make an RPCBuilder with result callback that assigns the result of the
+            // operation to an asyncio.Future (using either set_result() or set_exception())
+            auto op_builder = self.rpc("server")
+                .server(server_name)
+                .arg("op", "channels")
+                .result(pvxs_result_handler(loop, py_future));
+
+            // start the operation
+            auto op = op_builder.exec();
+            // attach done handler to the asyncio.Future so the operation continues until completion
+            py_future.attr("add_done_callback")(py_future_done_handler(op));
+            // return asyncio.Future representing the future result of the operation
+            return py_future;
+        }, "Constructs an RPCBuilder for the list channels operation and executes it, returning "
+           "an asyncio.Future representing the future result of the operation")
+
+       .def("discover", [](Context& self, std::function<void(const Discovered&)> cb, bool do_ping) {
             // the result of this method is an asyncio.Future,
             // await discover(...) with a timeout
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
