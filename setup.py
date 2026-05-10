@@ -1,3 +1,5 @@
+import sys
+from pathlib import Path
 from site import getsitepackages, getusersitepackages
 
 import epicscorelibs
@@ -7,7 +9,8 @@ from setuptools import setup
 
 # get paths to pvxslibs and epicscore libraries DSOs
 compiletime_dirs = [*pvxslibs.__path__, *epicscorelibs.__path__]
-runtime_dirs = [*getsitepackages(), getusersitepackages(), "@loader_path"]
+runtime_dirs = [*getsitepackages(), getusersitepackages(), "@loader_path"] if sys.platform != "win32" else []
+extra_compile_args=['-D_GLIBCXX_USE_CXX11_ABI=0'] if sys.platform == "win32" else []
 
 # declare pybind11 extension
 ext_modules = [
@@ -20,15 +23,16 @@ ext_modules = [
             'src/nt.cpp',
             'src/server.cpp',
         ],
+        extra_compile_args=extra_compile_args,
         include_dirs=[
-            f"{mod_dir}/include" for mod_dir in compiletime_dirs
+            str(Path(mod_dir) / "include") for mod_dir in compiletime_dirs
         ],
         library_dirs=[
-            f"{mod_dir}/lib" for mod_dir in compiletime_dirs
+            str(Path(mod_dir) / "lib") for mod_dir in compiletime_dirs
         ],
         runtime_library_dirs=[
-            *[f"{base_dir}/pvxslibs/lib" for base_dir in runtime_dirs],
-            *[f"{base_dir}/epicscorelibs/lib" for base_dir in runtime_dirs],
+            *[str(Path(base_dir) / "pvxslibs" / "lib") for base_dir in runtime_dirs],
+            *[str(Path(base_dir) / "epicscorelibs" / "lib") for base_dir in runtime_dirs],
         ],
         libraries=["pvxs", "event_core", "Com"],
         language='c++',
