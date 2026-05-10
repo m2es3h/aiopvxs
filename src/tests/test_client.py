@@ -16,6 +16,18 @@ _log = logging.getLogger(__file__)
 @pytest.mark.asyncio
 class TestClientRPC:
 
+    async def test_list_pvs(self, pvxs_test_server : Server,
+                            pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        rpc_op = client.list("localhost")
+        assert isinstance(rpc_op, Future)
+        val = await wait_for(rpc_op, timeout=3)
+        assert isinstance(val, Value)
+        assert 'value' in val.as_dict()
+        assert val['value'].as_list() == ["scalar_int32", "scalar_string"]
+
     async def test_rpc_no_impl(self, pvxs_test_server : Server,
                                pvxs_test_context : Context):
         server = pvxs_test_server
@@ -42,7 +54,7 @@ class TestClientRPC:
 
         rpc_op = client.rpc("scalar_string")
         assert isinstance(rpc_op, Future)
-        val = await rpc_op
+        val = await wait_for(rpc_op, timeout=3)
         assert isinstance(val, Value)
         assert val.type().code == T.Null
 
@@ -54,7 +66,7 @@ class TestClientRPC:
         rpc_op = client.rpc("scalar_string", some_float=999.9,
                                              some_string="a string")
         assert isinstance(rpc_op, Future)
-        val = await rpc_op
+        val = await wait_for(rpc_op, timeout=3)
         assert isinstance(val, Value)
         # pvxs_test_server has RPC handler that returns RPC query args
         assert 'query' in val.as_dict()
@@ -174,8 +186,7 @@ class TestEventCallbacks:
 
         def cb_function(discovered : Discovered):
             _log.info("In Context.discover() callback function")
-            #print(discovered, discovered.event.name)
-            #print(discovered.peerVersion, discovered.peer, discovered.proto, discovered.server)
+            #print(discovered.event.name, discovered.peer, discovered.proto, discovered.server)
             assert discovered.event.name == "Online"
 
         discover_op =  client.discover(cb_function, True)
