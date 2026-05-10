@@ -18,10 +18,11 @@ version = "0.2.0"
 authors = [{name = "Mike Smith", email = "m2es3h@gmail.com"}]
 description = "Python asyncio API to the PVXS libraries"
 readme = "README.md"
+requires-python = ">=3.10"
 dependencies = [
-    "pybind11==3.0",
-    "pvxslibs>=1.4, <1.5",
-    "epicscorelibs>=7.0",
+    "pybind11 == 3.0",
+    "pvxslibs >= 1.4, <1.5",
+    "epicscorelibs >= 7.0",
 ]
 
 [project.optional-dependencies]

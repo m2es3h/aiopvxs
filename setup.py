@@ -10,7 +10,7 @@ from setuptools import setup
 # get paths to pvxslibs and epicscore libraries DSOs
 compiletime_dirs = [*pvxslibs.__path__, *epicscorelibs.__path__]
 runtime_dirs = [*getsitepackages(), getusersitepackages(), "@loader_path"] if sys.platform != "win32" else []
-extra_compile_args=['-D_GLIBCXX_USE_CXX11_ABI=0'] if sys.platform == "win32" else []
+extra_compile_args=['-D_GLIBCXX_USE_CXX11_ABI=0'] if sys.platform.startswith("linux") else []
 
 # declare pybind11 extension
 ext_modules = [
