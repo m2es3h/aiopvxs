@@ -1,0 +1,71 @@
+# This workflow will upload a Python Package to PyPI when a release is created
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Upload Python Package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  release-build:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # macos-15 is Intel silicon, macos-14 is Apple silicon
+        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-14]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build release distributions
+        uses: pypa/cibuildwheel@v3.4
+        env:
+          # exclude all musllinux and win32 wheels
+          CIBW_SKIP: "*musllinux* *win32*"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: wheelhouse/*.whl
+          retention-days: 7
+
+  pypi-publish:
+    runs-on: ubuntu-latest
+    needs:
+      - release-build
+    permissions:
+      # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write
+
+    # Dedicated environments with protections for publishing are strongly recommended.
+    # For more information, see: https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#deployment-protection-rules
+    environment:
+      name: pypi
+      # OPTIONAL: uncomment and update to include your PyPI project URL in the deployment status:
+      # url: https://pypi.org/p/aiopvxs
+      #
+      # ALTERNATIVE: if your GitHub Release name is the PyPI project version string
+      # ALTERNATIVE: exactly, uncomment the following line instead:
+      url: https://pypi.org/project/aiopvxs/${{ github.event.release.name }}
+
+    steps:
+      - name: Retrieve release distributions
+        uses: actions/download-artifact@v6
+        with:
+          name: release-dists
+          path: wheelhouse/
+
+      - name: Publish release distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: wheelhouse/

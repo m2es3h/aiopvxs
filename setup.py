@@ -25,7 +25,9 @@ ext_modules = [
         ],
         extra_compile_args=extra_compile_args,
         include_dirs=[
-            str(Path(mod_dir) / "include") for mod_dir in compiletime_dirs
+            *[str(Path(mod_dir) / "include") for mod_dir in compiletime_dirs],
+            # path to this project's src directory
+            Path(__file__).parent.resolve() / 'src',
         ],
         library_dirs=[
             str(Path(mod_dir) / "lib") for mod_dir in compiletime_dirs
@@ -42,4 +44,6 @@ ext_modules = [
 
 setup(
     ext_modules=ext_modules,
+    # include files specified in MANIFEST.in
+    include_package_data=True
 )

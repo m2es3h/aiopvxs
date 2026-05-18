@@ -8,6 +8,15 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.cibuildwheel.windows]
+repair-wheel-command = ""
+
+[tool.cibuildwheel.linux]
+repair-wheel-command = "auditwheel repair --exclude libpvxs* --exclude libCom* --exclude libevent* -w {dest_dir} {wheel}"
+
+[tool.cibuildwheel.macos]
+repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} --ignore-missing-dependencies -w {dest_dir} -v {wheel}"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
