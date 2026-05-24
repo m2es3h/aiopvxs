@@ -3,14 +3,22 @@ Asynchronous PVAccess client/server API using Python asyncio and pybind11
 
 ## Key Features
 - Uses pybind11 to generate python bindings to pvxslibs v1.5 C++ library
-- Supports PVAccess StaticSource server
-- Supports PVAccess get and put client Context operations via python asyncio
 - Supports getting/setting pvxs.Value fields with python data types
+- Supports PVAccess StaticSource server
+- Supports PVAccess client Context operations via python asyncio
+    * get & put
+    * discover & list
+    * monitor (can retrieve updates via async for loop)
 
-## aiopvxs Installation
+## Installation
 
-It is recommended to install this project to a python virtual environment from
-a cloned copy of this source. To do this manually:
+It is recommended to install via the packages available on pypi.org. Packages
+are available for linux, win64, and macos intel/arm.
+
+```pip install aiopvxs```
+
+To compile this project manually, create python virtual environment from a
+cloned copy of this source and use pip install:
 
 ```bash
 git clone https://github.com/m2es3h/aiopvxs.git
