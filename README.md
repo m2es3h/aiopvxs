@@ -6,9 +6,10 @@ Asynchronous PVAccess client/server API using Python asyncio and pybind11
 - Supports getting/setting pvxs.Value fields with python data types
 - Supports PVAccess StaticSource server
 - Supports PVAccess client Context operations via python asyncio
-    * get & put
-    * discover & list
-    * monitor (can retrieve updates via async for loop)
+    * Get & Put
+    * RPC with arguments
+    * List (see [simple_discovery.py](https://github.com/m2es3h/aiopvxs/blob/main/src/tests/simple_discover.py) for simple pvlist implementation)
+    * Discover & Monitor (can retrieve updates via async for loop)
 
 ## Installation
 
