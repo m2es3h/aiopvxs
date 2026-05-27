@@ -4,8 +4,8 @@ from aiopvxs.client import Context
 
 async def main():
     client = Context()
-    # start the server discovery with do_ping = True
-    discover_op =  client.discover(True)
+    # start the server discovery with active ping
+    discover_op =  client.discover(do_ping = True)
 
     try:
         async with asyncio.timeout(5):

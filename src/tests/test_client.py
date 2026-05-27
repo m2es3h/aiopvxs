@@ -184,7 +184,7 @@ class TestEventCallbacks:
         server = pvxs_test_server
         client = pvxs_test_context
 
-        discover_op =  client.discover(True)
+        discover_op =  client.discover()
 
         try:
             async with timeout(0.25):

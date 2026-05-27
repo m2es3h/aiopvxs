@@ -421,7 +421,7 @@ void create_submodule_client(py::module_& m) {
 
             // make a DiscoverBuilder
             // callback "cb" is actually a temporary std::function created by pybind11
-            // that can be moved
+            // that is moved into op_builder
             auto op_builder = self.discover([loop, py_queue](const Discovered& srv){
                     py::gil_scoped_acquire lock;
 
@@ -439,7 +439,8 @@ void create_submodule_client(py::module_& m) {
             auto sub_with_event = AsyncDiscover(op, py_queue);
             // return the subscription
             return sub_with_event;
-        }, "Constructs a DiscoverBuilder for the operation and executes it, returning "
+        }, py::arg("do_ping") = true,
+           "Constructs a DiscoverBuilder for the operation and executes it, returning "
            "an asyncio.Future that can be awaited (with a timeout) or cancelled. It will "
            "never return a result, rather the discover results will arrive via the provided "
            "callback function.")
