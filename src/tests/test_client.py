@@ -184,17 +184,15 @@ class TestEventCallbacks:
         server = pvxs_test_server
         client = pvxs_test_context
 
-        def cb_function(discovered : Discovered):
-            _log.info("In Context.discover() callback function")
-            #print(discovered.event.name, discovered.peer, discovered.proto, discovered.server)
-            assert discovered.event.name == "Online"
-
-        discover_op =  client.discover(cb_function, True)
-        assert isinstance(discover_op, Future)
+        discover_op =  client.discover()
 
         try:
-            await wait_for(discover_op, timeout=0.25)
+            async with timeout(0.25):
+                async for endpoint in discover_op:
+                    assert endpoint.event.name == "Online"
         except TimeoutError:
+            pass
+        finally:
             discover_op.cancel()
 
     async def test_monitor(self, pvxs_test_server : Server,
@@ -205,19 +203,25 @@ class TestEventCallbacks:
         monitor_op = client.monitor("scalar_int32")
         assert isinstance(monitor_op, Subscription)
 
+        next_val = -42
         try:
-            next_val = -42
-            async for val in monitor_op:
-                # test that type code Null is never returned
-                assert val  # if(val) == True when type code is a Struct
-                if isinstance(val, Disconnected):
-                    break
+            async with timeout(3):
+                async for val in monitor_op:
+                    # test that type code Null is never returned
+                    assert val  # if(val) == True when type code is a Struct
+                    if isinstance(val, Disconnected):
+                        break
 
-                assert val.value.as_int() == next_val
-                if val.value.as_int() >= 0:
-                    server.stop()
-                else:
-                    next_val += 1. # count up towards zero
-                    await client.put("scalar_int32", {'value': next_val})
+                    assert val.value.as_int() == next_val
+                    if val.value.as_int() >= 0:
+                        server.stop()
+                    else:
+                        next_val += 1  # count up towards zero
+                        await client.put("scalar_int32", {'value': next_val})
+        except TimeoutError:
+            pass
         finally:
             monitor_op.cancel()
+
+        # fail if loop did not iterate the expected number of times
+        assert next_val == 0

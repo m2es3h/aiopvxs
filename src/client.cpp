@@ -170,6 +170,7 @@ public:
             py_queue.attr("put_nowait")(py::cast(exc));
         }
 
+        // return asyncio.Queue.get() co-routine
         return py_queue.attr("get")();
     }
 
@@ -180,6 +181,41 @@ public:
 
 private:
     std::shared_ptr<pvxs::client::Subscription> sub;
+    py::object py_queue;
+};
+
+/*
+ * AsyncDiscover
+ *
+ * Class that pairs a pvxs::client::Operation with an asyncio.Queue. Allows
+ * calling same methods as an Operation, but with additional methods to await
+ * on asyncio.Queue.get() to suspend execution until new data is ready.
+ *
+ */
+class AsyncDiscover {
+public:
+    AsyncDiscover(std::shared_ptr<pvxs::client::Operation> sub,
+                  py::object py_queue)
+        : sub(sub), py_queue(py_queue) {}
+
+    //~AsyncSubscription() { sub->cancel(); }
+
+    bool cancel() { return sub->cancel(); }
+
+    const std::string name() { return sub->name(); }
+
+    py::object pop() {
+        // return asyncio.Queue.get() co-routine
+        return py_queue.attr("get")();
+    }
+
+    py::object get() {
+        // return asyncio.Queue.get() co-routine
+        return this->pop();
+    }
+
+private:
+    std::shared_ptr<pvxs::client::Operation> sub;
     py::object py_queue;
 };
 
@@ -230,6 +266,22 @@ void create_submodule_client(py::module_& m) {
         // implement iterator protocol
         .def("__aiter__", [](const AsyncSubscription& self) { return self; })
         .def("__anext__", [](AsyncSubscription& self) {
+            // pop() items until some exit condition, then throw StopIteration
+            auto val = self.pop();
+            //if (!val)
+            //    throw py::stop_async_iteration();
+
+            return val;
+        });
+
+    py::class_<AsyncDiscover, py::smart_holder>(m, "Discover", "Represents the active discover operation")
+        .def("name", &AsyncDiscover::name, "Operation name")
+        .def("cancel", &AsyncDiscover::cancel, "Cancels an active event subscription")
+        .def("pop", &AsyncDiscover::pop, "Get updated Value from subscription queue")
+        .def("get", &AsyncDiscover::get, "Get updated Value from subscription queue (alias for pop())")
+        // implement iterator protocol
+        .def("__aiter__", [](const AsyncDiscover& self) { return self; })
+        .def("__anext__", [](AsyncDiscover& self) {
             // pop() items until some exit condition, then throw StopIteration
             auto val = self.pop();
             //if (!val)
@@ -361,25 +413,34 @@ void create_submodule_client(py::module_& m) {
         }, "Constructs an RPCBuilder for the list channels operation and executes it, returning "
            "an asyncio.Future representing the future result of the operation")
 
-       .def("discover", [](Context& self, std::function<void(const Discovered&)> cb, bool do_ping) {
+       .def("discover", [](Context& self, bool do_ping) {
             // the result of this method is an asyncio.Future,
             // await discover(...) with a timeout
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
-            py::object py_future = loop.attr("create_future")();
+            py::object py_queue = py::module_::import("asyncio").attr("Queue")();
 
             // make a DiscoverBuilder
             // callback "cb" is actually a temporary std::function created by pybind11
-            // that can be moved
-            auto op_builder = self.discover(std::move(cb))
+            // that is moved into op_builder
+            auto op_builder = self.discover([loop, py_queue](const Discovered& srv){
+                    py::gil_scoped_acquire lock;
+
+                    loop.attr("call_soon_threadsafe")(
+                        py::cpp_function([py_queue, srv]() {
+                            py_queue.attr("put_nowait")(srv);
+                        })
+                    );
+                })
                 .pingAll(do_ping);
 
             // start the operation
             auto op = op_builder.exec();
-            // attach done handler to the asyncio.Future (to call op.cancel() when done)
-            py_future.attr("add_done_callback")(py_future_done_handler(op));
-            // return asyncio.Future, can await with timeout or call .cancel() on it
-            return py_future;
-        }, "Constructs a DiscoverBuilder for the operation and executes it, returning "
+            // attach asyncio.Queue to the Operation so both are kept alive until completion
+            auto sub_with_event = AsyncDiscover(op, py_queue);
+            // return the subscription
+            return sub_with_event;
+        }, py::arg("do_ping") = true,
+           "Constructs a DiscoverBuilder for the operation and executes it, returning "
            "an asyncio.Future that can be awaited (with a timeout) or cancelled. It will "
            "never return a result, rather the discover results will arrive via the provided "
            "callback function.")
