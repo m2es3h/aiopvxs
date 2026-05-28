@@ -23,7 +23,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [project]
 name = "aiopvxs"
-version = "0.2.0"
+version = "0.3.0"
 urls = {"homepage" = "https://github.com/m2es3h/aiopvxs"}
 authors = [{name = "Mike Smith", email = "m2es3h@gmail.com"}]
 description = "Python asyncio API to the PVXS libraries"
