@@ -43,7 +43,6 @@ classifiers = [
 ]
 keywords = ['epics', 'scada', 'pvaccess']
 dependencies = [
-    "pybind11 >= 3.0",
     "pvxslibs ~= 1.5.0",
     "epicscorelibs >= 7.0",
 ]
