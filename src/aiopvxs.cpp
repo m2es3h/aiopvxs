@@ -31,7 +31,7 @@ void create_submodule_nt(py::module_&);
 void create_submodule_server(py::module_&);
 
 
-PYBIND11_MODULE(aiopvxs, m) {
+PYBIND11_MODULE(_aiopvxs, m) {
     using namespace pvxs;
 
     m.doc() = "Python asyncio API to the PVXS libraries";

@@ -5,7 +5,7 @@ from site import getsitepackages, getusersitepackages
 import epicscorelibs
 import pvxslibs
 from pybind11.setup_helpers import Pybind11Extension
-from setuptools import setup
+from setuptools import find_packages, setup
 
 # get paths to pvxslibs and epicscore libraries DSOs
 compiletime_dirs = [*pvxslibs.__path__, *epicscorelibs.__path__]
@@ -15,7 +15,7 @@ extra_compile_args=['-D_GLIBCXX_USE_CXX11_ABI=0'] if sys.platform.startswith("li
 # declare pybind11 extension
 ext_modules = [
     Pybind11Extension(
-        name = 'aiopvxs',
+        name = 'aiopvxs._aiopvxs',
         sources = [
             'src/aiopvxs.cpp',
             'src/client.cpp',
@@ -43,7 +43,11 @@ ext_modules = [
 ]
 
 setup(
+    # include pybind11 extension
     ext_modules=ext_modules,
-    # include files specified in MANIFEST.in
+    # include __init__.py loader and unit tests
+    package_dir={'': 'src'},
+    packages=find_packages(where='src'),
+    # include MANIFEST.in files in source distribution
     include_package_data=True
 )

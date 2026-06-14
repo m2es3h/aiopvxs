@@ -23,7 +23,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [project]
 name = "aiopvxs"
-version = "0.3.0"
+version = "0.3.1"
 urls = {"homepage" = "https://github.com/m2es3h/aiopvxs"}
 authors = [{name = "Mike Smith", email = "m2es3h@gmail.com"}]
 description = "Python asyncio API to the PVXS libraries"
@@ -43,7 +43,6 @@ classifiers = [
 ]
 keywords = ['epics', 'scada', 'pvaccess']
 dependencies = [
-    "pybind11 >= 3.0",
     "pvxslibs ~= 1.5.0",
     "epicscorelibs >= 7.0",
 ]

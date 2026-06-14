@@ -1,3 +1,4 @@
+include src/aiopvxs/__init__.py
+include src/aiopvxs/tests/*.py
 include src/*.hpp
 include src/*.cpp
-include src/tests/*.py
