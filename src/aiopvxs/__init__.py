@@ -1,14 +1,16 @@
 import os
-import sys
 from pathlib import Path
 
 import epicscorelibs
 import pvxslibs
 
-if sys.platform == "win32":
-    runtime_dirs = [*pvxslibs.__path__, *epicscorelibs.__path__]
+if os.name == "nt":
+    runtime_dll_dirs = [*pvxslibs.__path__, *epicscorelibs.__path__]
 
-    for base_dir in runtime_dirs:
+    for base_dir in runtime_dll_dirs:
         os.add_dll_directory(str(Path(base_dir).resolve() / "lib"))
+    del base_dir
 
-from aiopvxs._aiopvxs import *
+from ._aiopvxs import client, data, nt, server
+
+__all__ = ["client", "data", "nt", "server"]
