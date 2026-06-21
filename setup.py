@@ -9,7 +9,7 @@ from setuptools import find_packages, setup
 
 # get paths to pvxslibs and epicscore libraries DSOs
 compiletime_dirs = [*pvxslibs.__path__, *epicscorelibs.__path__]
-runtime_dirs = [*getsitepackages(), getusersitepackages(), "@loader_path"] if sys.platform != "win32" else []
+runtime_dirs = [] if sys.platform == "win32" else ["@loader_path"] if sys.platform == "darwin" else ["$ORIGIN"]
 extra_compile_args=['-D_GLIBCXX_USE_CXX11_ABI=0'] if sys.platform.startswith("linux") else []
 
 # declare pybind11 extension
@@ -33,8 +33,8 @@ ext_modules = [
             str(Path(mod_dir) / "lib") for mod_dir in compiletime_dirs
         ],
         runtime_library_dirs=[
-            *[str(Path(base_dir) / "pvxslibs" / "lib") for base_dir in runtime_dirs],
-            *[str(Path(base_dir) / "epicscorelibs" / "lib") for base_dir in runtime_dirs],
+            *[str(Path(base_dir) / ".." / "pvxslibs" / "lib") for base_dir in runtime_dirs],
+            *[str(Path(base_dir) / ".." / "epicscorelibs" / "lib") for base_dir in runtime_dirs],
         ],
         libraries=["pvxs", "event_core", "Com"],
         language='c++',
