@@ -69,3 +69,8 @@ print(type(val_array), val_array)
 """
 <class 'array.array'> array('q', [1, 2, 3, 4, 5])
 """
+
+mv = val_container.substruct.array64.as_view()
+print(mv, mv.tobytes())
+mv[3] = 999
+print(mv, mv.tolist(), val_container.substruct)
