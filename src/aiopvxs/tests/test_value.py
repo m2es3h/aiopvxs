@@ -163,6 +163,34 @@ class TestValueCasts:
         assert nt_value.timeStamp.as_dict().items() >= test_dict['timeStamp'].items()
         assert nt_value.value.as_py() == test_dict['value']
 
+    def test_integer_array_memoryview(self, nt_integer_arrays : tuple):
+        nt_type, pyarray_type, py_value = nt_integer_arrays
+
+        nt_value = nt_type.create()
+        nt_value['value'] = array.array(pyarray_type, py_value)
+        mv = nt_value.value.as_view()
+        assert isinstance(mv, memoryview)
+        assert list(nt_value.value.as_view()) == py_value
+
+        mv[2] = 111
+        assert nt_value.value.as_array()[2] == 111
+        assert mv.tolist()[2] == 111
+
+    def test_float_array_memoryview(self, nt_float_arrays : tuple):
+        nt_type, pyarray_type, py_value = nt_float_arrays
+
+        nt_value = nt_type.create()
+        nt_value['value'] = array.array(pyarray_type, py_value)
+        mv = nt_value.value.as_view()
+        assert isinstance(mv, memoryview)
+        if pyarray_type == 'f':
+            assert mv.tolist() == pytest.approx(py_value)
+        else:
+            assert mv.tolist() == py_value
+
+        mv[2] = 111.111
+        assert nt_value.value.as_array()[2] == pytest.approx(111.111)
+        assert mv.tolist()[2] == pytest.approx(111.111)
 
 class TestValueOps:
 

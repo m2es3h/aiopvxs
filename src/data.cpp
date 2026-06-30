@@ -280,6 +280,65 @@ void create_submodule_data(py::module_& m) {
 
         .def("as_array", static_cast<shared_array<const void> (Value::*)(void) const>(&Value::as<shared_array<const void>>),
                          "Returns a python array.array() representation of Value")
+        .def("as_view", [](const Value& self) {
+            auto sa = self.as<shared_array<const void>>();
+            const char* desc;
+            ssize_t elem_size;
+            switch (sa.original_type()) {
+                case ArrayType::Bool:
+                case ArrayType::UInt8:
+                    desc = py::format_descriptor<uint8_t>::value;
+                    elem_size = sizeof(uint8_t);
+                    break;
+                case ArrayType::UInt16:
+                    desc = py::format_descriptor<uint16_t>::value;
+                    elem_size = sizeof(uint16_t);
+                    break;
+                case ArrayType::UInt32:
+                    desc = py::format_descriptor<uint32_t>::value;
+                    elem_size = sizeof(uint32_t);
+                    break;
+                case ArrayType::UInt64:
+                    desc = py::format_descriptor<uint64_t>::value;
+                    elem_size = sizeof(uint64_t);
+                    break;
+                case ArrayType::Int8:
+                    desc = py::format_descriptor<int8_t>::value;
+                    elem_size = sizeof(int8_t);
+                    break;
+                case ArrayType::Int16:
+                    desc = py::format_descriptor<int16_t>::value;
+                    elem_size = sizeof(int16_t);
+                    break;
+                case ArrayType::Int32:
+                    desc = py::format_descriptor<int32_t>::value;
+                    elem_size = sizeof(int32_t);
+                    break;
+                case ArrayType::Int64:
+                    desc = py::format_descriptor<int64_t>::value;
+                    elem_size = sizeof(int64_t);
+                    break;
+                case ArrayType::Float32:
+                    desc = py::format_descriptor<float>::value;
+                    elem_size = sizeof(float);
+                    break;
+                case ArrayType::Float64:
+                    desc = py::format_descriptor<double>::value;
+                    elem_size = sizeof(double);
+                    break;
+                default:
+                    throw std::runtime_error("Cast not yet implemented.");
+            }
+
+            return py::memoryview::from_buffer(
+                const_cast<void *>(sa.data()),
+                elem_size,
+                desc,
+                {sa.size()},
+                {elem_size},
+                false
+            );
+        }, "Returns a python memoryview into the Value data")
 
         // convenient to call these instead of .as_array().tolist()
         .def("as_int_list", [](const Value& self) {
