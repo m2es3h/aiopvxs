@@ -71,6 +71,20 @@ print(type(val_array), val_array)
 """
 
 mv = val_container.substruct.array64.as_view()
-print(mv, mv.tobytes())
+print(mv.tobytes())
+"""
+b'\x01\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00'
+"""
 mv[3] = 999
-print(mv, mv.tolist(), val_container.substruct)
+print(mv.tolist())
+"""
+[1, 2, 3, 999, 5]
+"""
+print(val_container.substruct)
+"""
+struct {
+    bool flag = false
+    int16_t number32 = -888
+    int64_t[] array64 = {5}[1, 2, 3, 999, 5]
+}
+"""
