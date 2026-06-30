@@ -173,6 +173,7 @@ class TestValueCasts:
         assert list(nt_value.value.as_view()) == py_value
 
         mv[2] = 111
+        assert nt_value.value.as_array()[2] == 111
         assert mv.tolist()[2] == 111
 
     def test_float_array_memoryview(self, nt_float_arrays : tuple):
@@ -183,12 +184,13 @@ class TestValueCasts:
         mv = nt_value.value.as_view()
         assert isinstance(mv, memoryview)
         if pyarray_type == 'f':
-            assert pytest.approx(mv.tolist()) == py_value
+            assert mv.tolist() == pytest.approx(py_value)
         else:
             assert mv.tolist() == py_value
 
         mv[2] = 111.111
-        assert pytest.approx(mv.tolist()[2]) == 111.111
+        assert nt_value.value.as_array()[2] == pytest.approx(111.111)
+        assert mv.tolist()[2] == pytest.approx(111.111)
 
 class TestValueOps:
 
