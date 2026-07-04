@@ -5,7 +5,7 @@ from site import getsitepackages, getusersitepackages
 import epicscorelibs
 import pvxslibs
 from pybind11.setup_helpers import Pybind11Extension
-from setuptools import find_packages, setup
+from setuptools import find_namespace_packages, setup
 
 # get paths to pvxslibs and epicscore libraries DSOs
 compiletime_dirs = [*pvxslibs.__path__, *epicscorelibs.__path__]
@@ -53,7 +53,7 @@ setup(
     ext_modules=ext_modules,
     # include __init__.py loader and unit tests
     package_dir={'': 'src'},
-    packages=find_packages(where='src'),
+    packages=find_namespace_packages(where='src'),
     # include MANIFEST.in files in source distribution
     include_package_data=True
 )

@@ -2,6 +2,7 @@ import asyncio
 
 from aiopvxs.client import Context
 
+
 async def main():
     client = Context()
     # start the server discovery with active ping

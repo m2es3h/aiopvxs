@@ -11,6 +11,9 @@ if os.name == "nt":
         os.add_dll_directory(str(Path(base_dir).resolve() / "lib"))
     del base_dir
 
-from ._aiopvxs import client, data, nt, server
+from ._aiopvxs import (client, data, nt, pvxs_version, pvxs_version_abi,
+                       pvxs_version_int, server)
+from ._version import __version__
 
-__all__ = ["client", "data", "nt", "server"]
+__all__ = ["client", "data", "nt", "server", "pvxs_version",
+           "pvxs_version_int", "pvxs_version_abi", "__version__"]

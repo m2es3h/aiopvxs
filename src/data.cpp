@@ -283,7 +283,7 @@ void create_submodule_data(py::module_& m) {
         .def("as_view", [](const Value& self) {
             auto sa = self.as<shared_array<const void>>();
             const char* desc;
-            ssize_t elem_size;
+            size_t elem_size;
             switch (sa.original_type()) {
                 case ArrayType::Bool:
                 case ArrayType::UInt8:

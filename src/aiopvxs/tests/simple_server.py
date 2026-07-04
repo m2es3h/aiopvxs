@@ -4,6 +4,7 @@ from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.nt import NTScalar
 from aiopvxs.server import Server, SharedPV
 
+
 def callback(pv, op, value):
     print(f"onPUT handler called with new value: {value.value}")
     pv.post(value)

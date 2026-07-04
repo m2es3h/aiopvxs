@@ -1,12 +1,17 @@
 [build-system]
 requires = [
     "setuptools",
+    "setuptools-scm",
     "wheel",
     "pybind11 >= 3.0",
     "pvxslibs ~= 1.5.0",
     "epicscorelibs >= 7.0",
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+root = "."
+write_to = "src/aiopvxs/_version.py"
 
 [tool.cibuildwheel.windows]
 repair-wheel-command = ""
@@ -23,7 +28,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [project]
 name = "aiopvxs"
-version = "0.3.4"
+dynamic = ["version"]
 urls = {"homepage" = "https://github.com/m2es3h/aiopvxs"}
 authors = [{name = "Mike Smith", email = "m2es3h@gmail.com"}]
 description = "Python asyncio API to the PVXS libraries"
