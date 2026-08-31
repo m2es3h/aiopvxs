@@ -25,6 +25,8 @@
 
 #include <pvxs/client.h>
 
+#include "pvxs_gil.hpp"
+
 namespace py = pybind11;
 
 /*
@@ -40,11 +42,18 @@ namespace py = pybind11;
  *
  */
 inline std::function<void(pvxs::client::Result&&)>
-pvxs_result_handler(py::object loop, py::object py_future) {
+pvxs_result_handler(py::object loop_obj, py::object py_future_obj) {
+    GilObject loop_ref(loop_obj);
+    GilObject py_future_ref(py_future_obj);
+
     // lambda capture copies of asyncio event loop and Future
-    return [loop, py_future](pvxs::client::Result&& result) {
+    return [loop_ref, py_future_ref](pvxs::client::Result&& result) {
         // GIL lock not automatically held in C++ callback, acquire GIL lock
         py::gil_scoped_acquire lock;
+
+        py::object loop = loop_ref.obj();
+        py::object py_future = py_future_ref.obj();
+
         try {
             // test result for value or exception
             pvxs::Value value = result();
@@ -115,11 +124,15 @@ py_future_done_handler(std::shared_ptr<T> op) {
                  std::is_same<T, pvxs::client::Subscription>::value,
                 "Only Operation and Subscription are supported");
 
+    GilSafePtr<T> safe_op(op);
+
     // the lambda capture here is keeping the operation alive while it runs
-    return py::cpp_function([op](py::object fut) {
+    return py::cpp_function([safe_op](py::object fut) {
         // if Future was cancelled, also call Operation::cancel()
         if (fut.attr("cancelled")())
-            op->cancel();
+            pvxs_without_gil([safe_op]() {
+                safe_op->cancel();
+            });
     });
 }
 
@@ -139,9 +152,13 @@ public:
 
     //~AsyncSubscription() { sub->cancel(); }
 
-    bool cancel() { return sub->cancel(); }
-    void pause()  { return sub->pause(true); }
-    void resume() { return sub->pause(false); }
+    bool cancel() {
+        bool ret = false;
+        pvxs_without_gil([this, &ret]() { ret = sub->cancel(); });
+        return ret;
+    }
+    void pause()  { pvxs_without_gil([this]() { sub->pause(true); }); }
+    void resume() { pvxs_without_gil([this]() { sub->pause(false); }); }
 
     const std::string name() { return sub->name(); }
 
@@ -180,7 +197,7 @@ public:
     }
 
 private:
-    std::shared_ptr<pvxs::client::Subscription> sub;
+    GilSafePtr<pvxs::client::Subscription> sub;
     py::object py_queue;
 };
 
@@ -200,7 +217,11 @@ public:
 
     //~AsyncSubscription() { sub->cancel(); }
 
-    bool cancel() { return sub->cancel(); }
+    bool cancel() {
+        bool ret = false;
+        pvxs_without_gil([this, &ret]() { ret = sub->cancel(); });
+        return ret;
+    }
 
     const std::string name() { return sub->name(); }
 
@@ -215,7 +236,7 @@ public:
     }
 
 private:
-    std::shared_ptr<pvxs::client::Operation> sub;
+    GilSafePtr<pvxs::client::Operation> sub;
     py::object py_queue;
 };
 
@@ -256,7 +277,8 @@ void create_submodule_client(py::module_& m) {
     // here to auto-matically manage that
     py::class_<Operation, py::smart_holder>(m, "Operation", "Represents the in-progress network transaction")
         .def("name", &Operation::name, "Operation name")
-        .def("cancel", &Operation::cancel, "Cancels a in-progress network transaction");
+        .def("cancel", &Operation::cancel, py::call_guard<py::gil_scoped_release>(),
+                       "Cancels a in-progress network transaction");
 
     py::class_<AsyncSubscription, py::smart_holder>(m, "Subscription", "Represents the active event subscription")
         .def("name", &AsyncSubscription::name, "Operation name")
@@ -290,9 +312,12 @@ void create_submodule_client(py::module_& m) {
             return val;
         });
 
-    py::class_<Context>(m, "Context", "PVAccess protocol client")
-        .def(py::init(&Context::fromEnv), "Initialise a Context with settings from Config::fromEnv()")
-        .def("close", &Context::close, "Disconnects any active clients and closes network connection")
+    py::class_<Context>(m, "Context", py::release_gil_before_calling_cpp_dtor(),
+                                      "PVAccess protocol client")
+        .def(py::init(&Context::fromEnv), py::call_guard<py::gil_scoped_release>(),
+                                          "Initialise a Context with settings from Config::fromEnv()")
+        .def("close", &Context::close, py::call_guard<py::gil_scoped_release>(),
+                                       "Disconnects any active clients and closes network connection")
 
         .def("get", [](Context& self, std::string& pv_name) {
             // the result of this method is an asyncio.Future, so get() can be
@@ -319,12 +344,13 @@ void create_submodule_client(py::module_& m) {
             // treated like a co-routine (must await put(...) to retrieve the result)
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
+            GilObject new_data_ref(new_data);
 
             // make a PutBuilder with result callback that assigns the result of the
             // operation to an asyncio.Future (using either set_result() or set_exception())
             auto op_builder = self.put(pv_name)
                 .fetchPresent(true)
-                .build([new_data](Value&& current) {
+                .build([new_data_ref](Value&& current) {
                     // after initial get operation, apply python new_data to the
                     // pvxs::Value to take advantage of the automatic type casting
                     Value toput(current.cloneEmpty());
@@ -334,7 +360,7 @@ void create_submodule_client(py::module_& m) {
                     try {
                         // new_data is a python dictionary, assign it
                         // to recursively cast each key to its field
-                        py::cast(toput).attr("assign")(new_data);
+                        py::cast(toput).attr("assign")(new_data_ref.obj());
                     }
                     catch (py::error_already_set& e) {
                         // if any python exceptions are raised, need to catch them all
@@ -418,12 +444,17 @@ void create_submodule_client(py::module_& m) {
             // await discover(...) with a timeout
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_queue = py::module_::import("asyncio").attr("Queue")();
+            GilObject loop_ref(loop);
+            GilObject py_queue_ref(py_queue);
 
             // make a DiscoverBuilder
             // callback "cb" is actually a temporary std::function created by pybind11
             // that is moved into op_builder
-            auto op_builder = self.discover([loop, py_queue](const Discovered& srv){
+            auto op_builder = self.discover([loop_ref, py_queue_ref](const Discovered& srv){
                     py::gil_scoped_acquire lock;
+
+                    py::object py_queue = py_queue_ref.obj();
+                    py::object loop = loop_ref.obj();
 
                     loop.attr("call_soon_threadsafe")(
                         py::cpp_function([py_queue, srv]() {
@@ -449,10 +480,12 @@ void create_submodule_client(py::module_& m) {
             // the result of this method is an aiopvxs.client.Subscription
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_queue = py::module_::import("asyncio").attr("Queue")();
+            GilObject loop_ref(loop);
+            GilObject py_queue_ref(py_queue);
 
             // make a MonitorBuilder
             auto op_builder = self.monitor(pv_name)
-                .event([loop, py_queue](Subscription& sub) {
+                .event([loop_ref, py_queue_ref](Subscription& sub) {
                     // GIL lock not automatically held in C++ callback,
                     // acquire GIL lock when adding to event loop
                     py::gil_scoped_acquire lock;
@@ -471,6 +504,9 @@ void create_submodule_client(py::module_& m) {
                         py::print("C++ exception thrown in monitor callback:", exc.what());
                         val = py::cast(exc);
                     }
+
+                    py::object py_queue = py_queue_ref.obj();
+                    py::object loop = loop_ref.obj();
 
                     // put new data into python queue, unblocks any waiting q.get() calls
                     loop.attr("call_soon_threadsafe")(

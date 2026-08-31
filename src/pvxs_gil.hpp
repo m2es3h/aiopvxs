@@ -59,4 +59,85 @@ inline auto pvxs_without_gil(Fn&& fn, Args&&... args) {
     }
 }
 
+/*
+ * GILObject
+ *
+ */
+class GilObject {
+public:
+    GilObject() = default;
+
+    explicit GilObject(pybind11::object obj)
+        : m_ptr(obj.release().ptr(), &GilObject::decref) {}
+
+    pybind11::object obj() const {
+        return pybind11::reinterpret_borrow<pybind11::object>(pybind11::handle(m_ptr.get()));
+    }
+
+    explicit operator bool() const { return bool(m_ptr); }
+
+private:
+    static void decref(PyObject* ptr) {
+        if (!ptr)
+            return;
+
+#if PY_VERSION_HEX >= 0x030D0000
+        if (Py_IsFinalizing())
+            return;
+#else
+        if (_Py_IsFinalizing())
+            return;
+#endif
+
+        pybind11::gil_scoped_acquire acquire;
+        Py_DECREF(ptr);
+    }
+
+    std::shared_ptr<PyObject> m_ptr;
+};
+
+/*
+ * GilSafePtr
+ *
+ */
+template <typename T>
+class GilSafePtr {
+public:
+    GilSafePtr() = default;
+    explicit GilSafePtr(std::shared_ptr<T> ptr)
+        : m_ptr(std::move(ptr)) {}
+
+    GilSafePtr(const GilSafePtr& other) : m_ptr(other.m_ptr) {}
+    GilSafePtr(GilSafePtr&& other) : m_ptr(std::move(other.m_ptr)) {}
+
+    GilSafePtr& operator=(const GilSafePtr& other) {
+        if (this != &other) {
+            reset();
+            m_ptr = other.m_ptr;
+        }
+        return *this;
+    }
+
+    ~GilSafePtr() { reset(); }
+
+    void reset() {
+        if (!m_ptr)
+            return;
+
+        if (m_ptr.use_count() > 1) {
+            m_ptr.reset();
+        }
+        else {
+            pvxs_without_gil([this]() { m_ptr.reset(); });
+        }
+    }
+
+    T* operator->() const { return m_ptr.get(); }
+    T& operator*() const { return *m_ptr; }
+    explicit operator bool() const { return bool(m_ptr); }
+
+private:
+    std::shared_ptr<T> m_ptr;
+};
+
 #endif // AIOPVXS_GIL_HPP
