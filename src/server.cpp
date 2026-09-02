@@ -124,15 +124,15 @@ void create_submodule_server(py::module_& m) {
         // python helper methods
         // implement a context manager protocol so users can run server using 'with' statement
         // see pvxs_test_server() pytest fixture in src/tests/conftest.py for example usage
-        // Server& self is a Python reference, GIL already held, only call start/stop without GIL
+        // start()/stop() are called without GIL since it waits on pvxs worker threads
         .def("__enter__", [](Server& self) {
-            pvxs_without_gil([&self]() { self.start(); });
+            self.start();
             return self;
-        })
-        .def("__exit__", [](Server& self, py::object exc_type,
-                                          py::object exc_value,
-                                          py::object traceback) {
-            pvxs_without_gil([&self]() { self.stop(); });
+        }, py::call_guard<py::gil_scoped_release>())
+        .def("__exit__", [](Server& self, const py::object& exc_type,
+                                          const py::object& exc_value,
+                                          const py::object& traceback) {
+            self.stop();
             // uncaught exceptions within the context manager are available
             //if (exc_type.is(py::none())) {
             //    std::cout << "no exceptions" << std::endl;
@@ -140,6 +140,6 @@ void create_submodule_server(py::module_& m) {
             //else {
             //    std::cout << "exception raised" << std::endl;
             ///}
-        });
+        }, py::call_guard<py::gil_scoped_release>());
 
 }

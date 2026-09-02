@@ -37,19 +37,19 @@
  * (asyncio loop, Queue). When the callback is finished, a pvxs worker thread
  * release these Python resources. The refernce count of these Python objects
  * need to be decremented while holding the GIL.
- * 
+ *
  */
 
 #include <pybind11/pybind11.h>
 
  /*
-  * pvxs_without_gil()
+  * pvxs_call_without_gil()
   *
   * Runs a function with the GIL released when the current thread already holds the GIL.
   * Safe to call from a destructor, can run in a Python thread or pvxs worker thread.
   */
 template <typename Fn, typename... Args>
-inline auto pvxs_without_gil(Fn&& fn, Args&&... args) {
+inline auto pvxs_call_fn_without_gil(Fn&& fn, Args&&... args) {
     if (PyGILState_Check()) {
         pybind11::gil_scoped_release release;
         return std::forward<Fn>(fn)(std::forward<Args>(args)...);
@@ -60,84 +60,36 @@ inline auto pvxs_without_gil(Fn&& fn, Args&&... args) {
 }
 
 /*
- * GILObject
+ * pvxs_call_cpp_dtor_with_gil()
  *
+ * Wraps a python reference so that it may be released from a pvxs worker thread.
+ * Use the returned shared_ptr in the pvxs callback instead of the plain object T,
+ * whose destructor manipulates python objects.
+ *
+ * The GIL must be held when calling this function, and when dereferencing the
+ * shared_ptr.
  */
-class GilObject {
-public:
-    GilObject() = default;
-
-    explicit GilObject(pybind11::object obj)
-        : m_ptr(obj.release().ptr(), &GilObject::decref) {}
-
-    pybind11::object obj() const {
-        return pybind11::reinterpret_borrow<pybind11::object>(pybind11::handle(m_ptr.get()));
-    }
-
-    explicit operator bool() const { return bool(m_ptr); }
-
-private:
-    static void decref(PyObject* ptr) {
+template <typename T>
+inline std::shared_ptr<T> pvxs_call_cpp_dtor_with_gil(T obj) {
+    return std::shared_ptr<T>(new T(std::move(obj)), [](T* ptr) {
         if (!ptr)
             return;
 
-#if PY_VERSION_HEX >= 0x030D0000
-        if (Py_IsFinalizing())
-            return;
-#else
-        if (_Py_IsFinalizing())
-            return;
-#endif
+        // once the interpreter is finalizing acquiring the GIL would
+        // hang or abort this thread
+        #if PY_VERSION_HEX >= 0x030D0000
+            if (Py_IsFinalizing())
+                return;
+        #else
+            if (_Py_IsFinalizing())
+                return;
+        #endif
 
-        pybind11::gil_scoped_acquire acquire;
-        Py_DECREF(ptr);
-    }
-
-    std::shared_ptr<PyObject> m_ptr;
-};
-
-/*
- * GilSafePtr
- *
- */
-template <typename T>
-class GilSafePtr {
-public:
-    GilSafePtr() = default;
-    explicit GilSafePtr(std::shared_ptr<T> ptr)
-        : m_ptr(std::move(ptr)) {}
-
-    GilSafePtr(const GilSafePtr& other) : m_ptr(other.m_ptr) {}
-    GilSafePtr(GilSafePtr&& other) : m_ptr(std::move(other.m_ptr)) {}
-
-    GilSafePtr& operator=(const GilSafePtr& other) {
-        if (this != &other) {
-            reset();
-            m_ptr = other.m_ptr;
-        }
-        return *this;
-    }
-
-    ~GilSafePtr() { reset(); }
-
-    void reset() {
-        if (!m_ptr)
-            return;
-
-        if (m_ptr.use_count() > 1) {
-            m_ptr.reset();
-        }
-        else {
-            pvxs_without_gil([this]() { m_ptr.reset(); });
-        }
-    }
-
-    T* operator->() const { return m_ptr.get(); }
-    T& operator*() const { return *m_ptr; }
-    explicit operator bool() const { return bool(m_ptr); }
-
-private:
-    std::shared_ptr<T> m_ptr;
-};
+        // delete while holding GIL lock
+        // for a py::object the delete will call Py_DECREF
+        pybind11::gil_scoped_acquire lock;
+        delete ptr;
+    });
+}
 
 #endif // AIOPVXS_GIL_HPP

@@ -43,16 +43,18 @@ namespace py = pybind11;
  */
 inline std::function<void(pvxs::client::Result&&)>
 pvxs_result_handler(py::object loop_obj, py::object py_future_obj) {
-    GilObject loop_ref(loop_obj);
-    GilObject py_future_ref(py_future_obj);
+    // these python objects will be destructed by a pvxs worker thread
+    // ensure that the Python objects are destructed while holding the GIL
+    auto loop_ref = pvxs_call_cpp_dtor_with_gil(loop_obj);
+    auto py_future_ref = pvxs_call_cpp_dtor_with_gil(py_future_obj);
 
     // lambda capture copies of asyncio event loop and Future
     return [loop_ref, py_future_ref](pvxs::client::Result&& result) {
         // GIL lock not automatically held in C++ callback, acquire GIL lock
         py::gil_scoped_acquire lock;
 
-        py::object loop = loop_ref.obj();
-        py::object py_future = py_future_ref.obj();
+        py::object loop = *loop_ref;
+        py::object py_future = *py_future_ref;
 
         try {
             // test result for value or exception
@@ -124,15 +126,18 @@ py_future_done_handler(std::shared_ptr<T> op) {
                  std::is_same<T, pvxs::client::Subscription>::value,
                 "Only Operation and Subscription are supported");
 
-    GilSafePtr<T> safe_op(op);
+    // cast the C++ operation/subscription to its Python bound type, so that
+    // the bound cancel() method can be called
+    py::object py_op = py::cast(std::move(op));
 
     // the lambda capture here is keeping the operation alive while it runs
-    return py::cpp_function([safe_op](py::object fut) {
+    return py::cpp_function([py_op](py::object fut) {
         // if Future was cancelled, also call Operation::cancel()
         if (fut.attr("cancelled")())
-            pvxs_without_gil([safe_op]() {
-                safe_op->cancel();
-            });
+            // called using python binding + call_guard<gil_scoped_release>(),
+            // GIL not held because cancel() waits on pvxs workers that might
+            // need to take the GIL in order to handle Python objects
+            py_op.attr("cancel")();
     });
 }
 
@@ -148,22 +153,21 @@ class AsyncSubscription {
 public:
     AsyncSubscription(std::shared_ptr<pvxs::client::Subscription> sub,
                       py::object py_queue)
-        : sub(sub), py_queue(py_queue) {}
+        : sub(std::move(sub)),
+          py_queue_ref(pvxs_call_cpp_dtor_with_gil(py_queue)) {}
 
     //~AsyncSubscription() { sub->cancel(); }
 
-    bool cancel() {
-        bool ret = false;
-        pvxs_without_gil([this, &ret]() { ret = sub->cancel(); });
-        return ret;
-    }
-    void pause()  { pvxs_without_gil([this]() { sub->pause(true); }); }
-    void resume() { pvxs_without_gil([this]() { sub->pause(false); }); }
+    // cancel()/pause() wait on worker threads that might hold the GIL
+    // these are called using python binding + call_guard<gil_scoped_release>()
+    bool cancel() { return sub->cancel(); }
+    void pause()  { sub->pause(true); }
+    void resume() { sub->pause(false); }
 
     const std::string name() { return sub->name(); }
 
     py::object pop() {
-        py::object val;
+        py::object py_queue = *py_queue_ref;
 
         try {
             auto val = sub->pop();
@@ -197,8 +201,8 @@ public:
     }
 
 private:
-    GilSafePtr<pvxs::client::Subscription> sub;
-    py::object py_queue;
+    std::shared_ptr<pvxs::client::Subscription> sub;
+    std::shared_ptr<py::object> py_queue_ref;
 };
 
 /*
@@ -213,21 +217,20 @@ class AsyncDiscover {
 public:
     AsyncDiscover(std::shared_ptr<pvxs::client::Operation> sub,
                   py::object py_queue)
-        : sub(sub), py_queue(py_queue) {}
+        : sub(std::move(sub)),
+          py_queue_ref(pvxs_call_cpp_dtor_with_gil(py_queue)) {}
 
     //~AsyncSubscription() { sub->cancel(); }
 
-    bool cancel() {
-        bool ret = false;
-        pvxs_without_gil([this, &ret]() { ret = sub->cancel(); });
-        return ret;
-    }
+    // cancel() waits on worker threads that might hold the GIL
+    // called using python binding + call_guard<gil_scoped_release>()
+    bool cancel() { return sub->cancel(); }
 
     const std::string name() { return sub->name(); }
 
     py::object pop() {
         // return asyncio.Queue.get() co-routine
-        return py_queue.attr("get")();
+        return (*py_queue_ref).attr("get")();
     }
 
     py::object get() {
@@ -236,8 +239,8 @@ public:
     }
 
 private:
-    GilSafePtr<pvxs::client::Operation> sub;
-    py::object py_queue;
+    std::shared_ptr<pvxs::client::Operation> sub;
+    std::shared_ptr<py::object> py_queue_ref;
 };
 
 
@@ -275,16 +278,31 @@ void create_submodule_client(py::module_& m) {
 
     // Operations are always wrapped in a shared_ptr<>, define py::smart_holder
     // here to auto-matically manage that
-    py::class_<Operation, py::smart_holder>(m, "Operation", "Represents the in-progress network transaction")
+    py::class_<Operation, py::smart_holder>(m, "Operation",
+                                            py::release_gil_before_calling_cpp_dtor(),
+                                            "Represents the in-progress network transaction")
         .def("name", &Operation::name, "Operation name")
-        .def("cancel", &Operation::cancel, py::call_guard<py::gil_scoped_release>(),
+        .def("cancel", &Operation::cancel,
+                       py::call_guard<py::gil_scoped_release>(), // waits on pvxs worker
                        "Cancels a in-progress network transaction");
 
-    py::class_<AsyncSubscription, py::smart_holder>(m, "Subscription", "Represents the active event subscription")
+    py::class_<AsyncSubscription, py::smart_holder>(m, "Subscription",
+                                                    py::release_gil_before_calling_cpp_dtor(),
+                                                    "Represents the active event subscription")
         .def("name", &AsyncSubscription::name, "Operation name")
-        .def("cancel", &AsyncSubscription::cancel, "Cancels an active event subscription")
-        .def("pop", &AsyncSubscription::pop, "Get updated Value from subscription queue")
-        .def("get", &AsyncSubscription::get, "Get updated Value from subscription queue (alias for pop())")
+        .def("cancel", &AsyncSubscription::cancel,
+                       py::call_guard<py::gil_scoped_release>(), // waits on pvxs worker
+                       "Cancels an active event subscription")
+        .def("pause", &AsyncSubscription::pause,
+                       py::call_guard<py::gil_scoped_release>(), // waits on pvxs worker
+                       "Pauses an active event subscription")
+        .def("resume", &AsyncSubscription::resume,
+                       py::call_guard<py::gil_scoped_release>(), // waits on pvxs worker
+                       "Resumes an active event subscription")
+        .def("pop", &AsyncSubscription::pop,
+                    "Get updated Value from subscription queue")
+        .def("get", &AsyncSubscription::get,
+                    "Get updated Value from subscription queue (alias for pop())")
         // implement iterator protocol
         .def("__aiter__", [](const AsyncSubscription& self) { return self; })
         .def("__anext__", [](AsyncSubscription& self) {
@@ -296,11 +314,17 @@ void create_submodule_client(py::module_& m) {
             return val;
         });
 
-    py::class_<AsyncDiscover, py::smart_holder>(m, "Discover", "Represents the active discover operation")
+    py::class_<AsyncDiscover, py::smart_holder>(m, "Discover",
+                                                py::release_gil_before_calling_cpp_dtor(),
+                                                "Represents the active discover operation")
         .def("name", &AsyncDiscover::name, "Operation name")
-        .def("cancel", &AsyncDiscover::cancel, "Cancels an active event subscription")
-        .def("pop", &AsyncDiscover::pop, "Get updated Value from subscription queue")
-        .def("get", &AsyncDiscover::get, "Get updated Value from subscription queue (alias for pop())")
+        .def("cancel", &AsyncDiscover::cancel,
+                       py::call_guard<py::gil_scoped_release>(), // waits on pvxs worker
+                       "Cancels an active event subscription")
+        .def("pop", &AsyncDiscover::pop,
+                    "Get updated Value from subscription queue")
+        .def("get", &AsyncDiscover::get,
+                    "Get updated Value from subscription queue (alias for pop())")
         // implement iterator protocol
         .def("__aiter__", [](const AsyncDiscover& self) { return self; })
         .def("__anext__", [](AsyncDiscover& self) {
@@ -312,8 +336,11 @@ void create_submodule_client(py::module_& m) {
             return val;
         });
 
-    py::class_<Context>(m, "Context", py::release_gil_before_calling_cpp_dtor(),
-                                      "PVAccess protocol client")
+    // Context joins pvxs workers on destruction, use py::release_gil_before_calling_cpp_dtor()
+    // to allow python objects in pvxs workers to destruct with GIL held
+    py::class_<Context>(m, "Context",
+                        py::release_gil_before_calling_cpp_dtor(), // waits on pvxs workers
+                        "PVAccess protocol client")
         .def(py::init(&Context::fromEnv), py::call_guard<py::gil_scoped_release>(),
                                           "Initialise a Context with settings from Config::fromEnv()")
         .def("close", &Context::close, py::call_guard<py::gil_scoped_release>(),
@@ -344,7 +371,9 @@ void create_submodule_client(py::module_& m) {
             // treated like a co-routine (must await put(...) to retrieve the result)
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
-            GilObject new_data_ref(new_data);
+            // these python objects will be destructed by a pvxs worker thread
+            // ensure that the Python objects are destructed while holding the GIL
+            auto new_data_ref = pvxs_call_cpp_dtor_with_gil(new_data);
 
             // make a PutBuilder with result callback that assigns the result of the
             // operation to an asyncio.Future (using either set_result() or set_exception())
@@ -360,7 +389,7 @@ void create_submodule_client(py::module_& m) {
                     try {
                         // new_data is a python dictionary, assign it
                         // to recursively cast each key to its field
-                        py::cast(toput).attr("assign")(new_data_ref.obj());
+                        py::cast(toput).attr("assign")(*new_data_ref);
                     }
                     catch (py::error_already_set& e) {
                         // if any python exceptions are raised, need to catch them all
@@ -402,11 +431,14 @@ void create_submodule_client(py::module_& m) {
             // add each keyword argument as rpc call argument
             for (auto item : kwargs) {
                 if (py::isinstance<py::int_>(item.second))
-                    op_builder = op_builder.arg(item.first.cast<std::string>(), item.second.cast<int64_t>());
+                    op_builder = op_builder.arg(item.first.cast<std::string>(),
+                                                item.second.cast<int64_t>());
                 else if (py::isinstance<py::float_>(item.second))
-                    op_builder = op_builder.arg(item.first.cast<std::string>(), item.second.cast<double>());
+                    op_builder = op_builder.arg(item.first.cast<std::string>(),
+                                                item.second.cast<double>());
                 else
-                    op_builder = op_builder.arg(item.first.cast<std::string>(), item.second.cast<std::string>());
+                    op_builder = op_builder.arg(item.first.cast<std::string>(),
+                                                item.second.cast<std::string>());
             }
 
             // start the operation
@@ -444,17 +476,20 @@ void create_submodule_client(py::module_& m) {
             // await discover(...) with a timeout
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_queue = py::module_::import("asyncio").attr("Queue")();
-            GilObject loop_ref(loop);
-            GilObject py_queue_ref(py_queue);
+            // these python objects will be destructed by a pvxs worker thread
+            // ensure that the Python objects are destructed while holding the GIL
+            auto loop_ref = pvxs_call_cpp_dtor_with_gil(loop);
+            auto py_queue_ref = pvxs_call_cpp_dtor_with_gil(py_queue);
 
             // make a DiscoverBuilder
             // callback "cb" is actually a temporary std::function created by pybind11
             // that is moved into op_builder
-            auto op_builder = self.discover([loop_ref, py_queue_ref](const Discovered& srv){
+            auto op_builder = self.discover(
+                [loop_ref, py_queue_ref](const Discovered& srv){
                     py::gil_scoped_acquire lock;
 
-                    py::object py_queue = py_queue_ref.obj();
-                    py::object loop = loop_ref.obj();
+                    py::object py_queue = *py_queue_ref;
+                    py::object loop = *loop_ref;
 
                     loop.attr("call_soon_threadsafe")(
                         py::cpp_function([py_queue, srv]() {
@@ -480,8 +515,10 @@ void create_submodule_client(py::module_& m) {
             // the result of this method is an aiopvxs.client.Subscription
             py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
             py::object py_queue = py::module_::import("asyncio").attr("Queue")();
-            GilObject loop_ref(loop);
-            GilObject py_queue_ref(py_queue);
+            // these python objects will be destructed by a pvxs worker thread
+            // ensure that the Python objects are destructed while holding the GIL
+            auto loop_ref = pvxs_call_cpp_dtor_with_gil(loop);
+            auto py_queue_ref = pvxs_call_cpp_dtor_with_gil(py_queue);
 
             // make a MonitorBuilder
             auto op_builder = self.monitor(pv_name)
@@ -505,8 +542,8 @@ void create_submodule_client(py::module_& m) {
                         val = py::cast(exc);
                     }
 
-                    py::object py_queue = py_queue_ref.obj();
-                    py::object loop = loop_ref.obj();
+                    py::object py_queue = *py_queue_ref;
+                    py::object loop = *loop_ref;
 
                     // put new data into python queue, unblocks any waiting q.get() calls
                     loop.attr("call_soon_threadsafe")(
