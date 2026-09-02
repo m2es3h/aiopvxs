@@ -25,6 +25,8 @@
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
 
+#include "pvxs_gil.hpp"
+
 namespace py = pybind11;
 
 
@@ -84,10 +86,15 @@ void create_submodule_server(py::module_& m) {
         .def("onPut", &SharedPV::onPut, "Install a custom callback function for PUT operations on this PV.")
         .def("onRPC", &SharedPV::onRPC, "Install a custom callback function for RPC operations on this PV.");
 
-    py::class_<Server>(m, "Server", "PVAccess protocol server")
+    // Server::Pvt::~Pvt() calls stop(), which wait for pvxs workers, which might
+    // be waiting for the GIL, so do not hold GIL on Server destruction
+    py::class_<Server>(m, "Server", py::release_gil_before_calling_cpp_dtor(),
+                                    "PVAccess protocol server")
 
         // constructors
-        .def(py::init(&Server::fromEnv), "Initialise a Server with settings from Config::fromEnv()")
+        // input arguments are converted before method is called, safe to not hold GIL
+        .def(py::init(&Server::fromEnv), py::call_guard<py::gil_scoped_release>(),
+                                         "Initialise a Server with settings from Config::fromEnv()")
         .def(py::init([](const std::map<std::string, SharedPV>& provider) {
             auto src = StaticSource::build();
             for (const auto& pv : provider)
@@ -96,25 +103,35 @@ void create_submodule_server(py::module_& m) {
             auto server = Server::fromEnv();
             server.addSource("StaticSource", src.source());
             return server;
-        }), py::arg("provider"), "Initialize a Server with dictionary of SharedPVs")
+        }), py::arg("provider"), py::call_guard<py::gil_scoped_release>(),
+            "Initialize a Server with dictionary of SharedPVs")
 
         // class methods
-        .def("listSource", &Server::listSource, "Return list[tuple] with source names and priority ranking")
-        .def("start", &Server::start, "Start the Server")
-        .def("stop", &Server::stop, "Stop the Server")
-        .def("run", &Server::run, "Start the Server and block execution")
-        .def("interrupt", &Server::interrupt, "Queue a request to unblock run()")
+        // each of these hands work to the server's workers, then those workers
+        // run SharedPV callbacks which need the GIL
+        .def("listSource", &Server::listSource, py::call_guard<py::gil_scoped_release>(),
+                           "Return list[tuple] with source names and priority ranking")
+        .def("start", &Server::start, py::call_guard<py::gil_scoped_release>(),
+                      "Start the Server")
+        .def("stop", &Server::stop, py::call_guard<py::gil_scoped_release>(),
+                     "Stop the Server")
+        .def("run", &Server::run, py::call_guard<py::gil_scoped_release>(),
+                    "Start the Server and block the calling thread until interrupt(), "
+                    "or until SIGINT is received (handled by pvxs installed SIGINT handler)")
+        .def("interrupt", &Server::interrupt, py::call_guard<py::gil_scoped_release>(),
+                          "Queue a request to unblock run()")
 
         // python helper methods
         // implement a context manager protocol so users can run server using 'with' statement
         // see pvxs_test_server() pytest fixture in src/tests/conftest.py for example usage
+        // start()/stop() are called without GIL since it waits on pvxs worker threads
         .def("__enter__", [](Server& self) {
             self.start();
             return self;
-        })
-        .def("__exit__", [](Server& self, py::object exc_type,
-                                          py::object exc_value,
-                                          py::object traceback) {
+        }, py::call_guard<py::gil_scoped_release>())
+        .def("__exit__", [](Server& self, const py::object& exc_type,
+                                          const py::object& exc_value,
+                                          const py::object& traceback) {
             self.stop();
             // uncaught exceptions within the context manager are available
             //if (exc_type.is(py::none())) {
@@ -123,6 +140,6 @@ void create_submodule_server(py::module_& m) {
             //else {
             //    std::cout << "exception raised" << std::endl;
             ///}
-        });
+        }, py::call_guard<py::gil_scoped_release>());
 
 }

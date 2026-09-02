@@ -9,7 +9,8 @@ from setuptools import find_namespace_packages, setup
 
 # get paths to pvxslibs and epicscore libraries DSOs
 compiletime_dirs = [*pvxslibs.__path__, *epicscorelibs.__path__]
-extra_compile_args = ['-D_GLIBCXX_USE_CXX11_ABI=0'] if sys.platform.startswith("linux") else []
+debug_compile_args = ['-g', '-O0', '-DPYBIND11_ASSERT_GIL_HELD_INCREF_DECREF']
+release_compile_args = []
 
 if sys.platform == "win32":
     runtime_dirs = []  # os.add_dll_directory() in __init__.py used for windows
@@ -29,7 +30,8 @@ ext_modules = [
             'src/nt.cpp',
             'src/server.cpp',
         ],
-        extra_compile_args=extra_compile_args,
+        #extra_compile_args=debug_compile_args,
+        extra_compile_args=release_compile_args,
         include_dirs=[
             *[str(Path(mod_dir) / "include") for mod_dir in compiletime_dirs],
             # path to this project's src directory
