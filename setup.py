@@ -30,8 +30,8 @@ ext_modules = [
             'src/nt.cpp',
             'src/server.cpp',
         ],
-        extra_compile_args=debug_compile_args,
-        #extra_compile_args=release_compile_args,
+        #extra_compile_args=debug_compile_args,
+        extra_compile_args=release_compile_args,
         include_dirs=[
             *[str(Path(mod_dir) / "include") for mod_dir in compiletime_dirs],
             # path to this project's src directory
@@ -46,7 +46,7 @@ ext_modules = [
         ],
         libraries=["pvxs", "event_core", "Com"],
         language='c++',
-        cxx_std=14,
+        cxx_std=11,
     ),
 ]
 

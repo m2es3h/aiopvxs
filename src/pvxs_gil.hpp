@@ -49,7 +49,8 @@
   * Safe to call from a destructor, can run in a Python thread or pvxs worker thread.
   */
 template <typename Fn, typename... Args>
-inline auto pvxs_call_fn_without_gil(Fn&& fn, Args&&... args) {
+inline auto pvxs_call_fn_without_gil(Fn&& fn, Args&&... args)
+        -> decltype(std::forward<Fn>(fn)(std::forward<Args>(args)...)) {
     if (PyGILState_Check()) {
         pybind11::gil_scoped_release release;
         return std::forward<Fn>(fn)(std::forward<Args>(args)...);
