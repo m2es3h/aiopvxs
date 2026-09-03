@@ -31,7 +31,7 @@ jobs:
         uses: pypa/cibuildwheel@v3.4
         env:
           # exclude all musllinux and win32 wheels
-          CIBW_SKIP: "*musllinux* *win32*"
+          CIBW_SKIP: "*musllinux* *win32* cp314t-win_amd64"
 
       - uses: actions/upload-artifact@v6
         with:
