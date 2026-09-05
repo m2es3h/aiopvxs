@@ -30,6 +30,22 @@
 namespace py = pybind11;
 
 /*
+ * get_asyncio_module()
+ *
+ * Imports the python asyncio module once and
+ * returns a reference to it when needed.
+ */
+py::object& get_asyncio_module() {
+    PYBIND11_CONSTINIT \
+        static py::gil_safe_call_once_and_store<py::object> storage;
+
+    return storage.call_once_and_store_result([]() {
+        // This code runs only once (with the GIL held)
+        return py::module_::import("asyncio");
+    }).get_stored();
+}
+
+/*
  * pvxs_result_handler
  *
  * Returns a std::function<> that can be used as client Context
@@ -349,7 +365,7 @@ void create_submodule_client(py::module_& m) {
         .def("get", [](Context& self, std::string& pv_name) {
             // the result of this method is an asyncio.Future, so get() can be
             // treated like a co-routine (must await get(...) to retrieve the result)
-            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
+            py::object loop = get_asyncio_module().attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
 
             // make a GetBuilder with result callback that assigns the result of the
@@ -369,7 +385,7 @@ void create_submodule_client(py::module_& m) {
         .def("put", [](Context& self, std::string& pv_name, py::object new_data) {
             // the result of this method is an asyncio.Future, so put() can be
             // treated like a co-routine (must await put(...) to retrieve the result)
-            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
+            py::object loop = get_asyncio_module().attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
             // these python objects will be destructed by a pvxs worker thread
             // ensure that the Python objects are destructed while holding the GIL
@@ -421,7 +437,7 @@ void create_submodule_client(py::module_& m) {
         .def("rpc", [](Context& self, std::string& pv_name, py::kwargs kwargs) {
             // the result of this method is an asyncio.Future, so rpc() can be
             // treated like a co-routine (must await rpc(...) to retrieve the result)
-            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
+            py::object loop = get_asyncio_module().attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
 
             // make an RPCBuilder with result callback that assigns the result of the
@@ -452,7 +468,7 @@ void create_submodule_client(py::module_& m) {
 
         .def("list", [](Context& self, std::string& server_name) {
             // list is an RPC call with a special set of operations/arguments
-            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
+            py::object loop = get_asyncio_module().attr("get_event_loop")();
             py::object py_future = loop.attr("create_future")();
 
             // make an RPCBuilder with result callback that assigns the result of the
@@ -474,8 +490,8 @@ void create_submodule_client(py::module_& m) {
        .def("discover", [](Context& self, bool do_ping) {
             // the result of this method is an asyncio.Future,
             // await discover(...) with a timeout
-            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
-            py::object py_queue = py::module_::import("asyncio").attr("Queue")();
+            py::object loop = get_asyncio_module().attr("get_event_loop")();
+            py::object py_queue = get_asyncio_module().attr("Queue")();
             // these python objects will be destructed by a pvxs worker thread
             // ensure that the Python objects are destructed while holding the GIL
             auto loop_ref = pvxs_call_cpp_dtor_with_gil(loop);
@@ -513,8 +529,8 @@ void create_submodule_client(py::module_& m) {
 
         .def("monitor", [](Context& self, std::string& pv_name) {
             // the result of this method is an aiopvxs.client.Subscription
-            py::object loop = py::module_::import("asyncio").attr("get_event_loop")();
-            py::object py_queue = py::module_::import("asyncio").attr("Queue")();
+            py::object loop = get_asyncio_module().attr("get_event_loop")();
+            py::object py_queue = get_asyncio_module().attr("Queue")();
             // these python objects will be destructed by a pvxs worker thread
             // ensure that the Python objects are destructed while holding the GIL
             auto loop_ref = pvxs_call_cpp_dtor_with_gil(loop);
