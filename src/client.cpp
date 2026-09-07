@@ -119,6 +119,8 @@ pvxs_result_handler(py::object loop_obj, py::object py_future_obj) {
                 // GIL lock is held by default when py::cpp_function
                 // eventually executes
                 py::cpp_function([py_future, value]() {
+                    if (py_future.attr("done")().cast<bool>())
+                        return;  // avoid InvalidStateError if already done
                     py_future.attr("set_result")(value);
                 })
             );
@@ -130,6 +132,21 @@ pvxs_result_handler(py::object loop_obj, py::object py_future_obj) {
 
             loop.attr("call_soon_threadsafe")(
                 py::cpp_function([py_future, py_exc]() {
+                    if (py_future.attr("done")().cast<bool>())
+                        return;  // avoid InvalidStateError if already done
+                    py_future.attr("set_exception")(py_exc);
+                })
+            );
+        }
+        // if any python exceptions are raised (such as in the put builder
+        // callback), assign the exception to the asyncio.Future
+        catch (py::error_already_set& e) {
+            py::object py_exc = e.value();
+
+            loop.attr("call_soon_threadsafe")(
+                py::cpp_function([py_future, py_exc]() {
+                    if (py_future.attr("done")().cast<bool>())
+                        return;  // avoid InvalidStateError if already done
                     py_future.attr("set_exception")(py_exc);
                 })
             );
@@ -137,11 +154,13 @@ pvxs_result_handler(py::object loop_obj, py::object py_future_obj) {
         // safe catch-all for any other exceptions
         catch (const std::exception& exc) {
             py::object py_exc = get_builtins_RuntimeError()(exc.what());
-            py::print("Unexpected C++ exception thrown in monitor callback:",
-                        exc.what());
+            py::print("Unexpected C++ exception thrown in result handler:",
+                      exc.what());
 
             loop.attr("call_soon_threadsafe")(
                 py::cpp_function([py_future, py_exc]() {
+                    if (py_future.attr("done")().cast<bool>())
+                        return;  // avoid InvalidStateError if already done
                     py_future.attr("set_exception")(py_exc);
                 })
             );
@@ -296,7 +315,8 @@ void create_submodule_client(py::module_& m) {
     PVXSExc_RemoteError = py::register_local_exception<RemoteError>(m, "RemoteError", PyExc_RuntimeError);
     PVXSExc_Connected = py::register_local_exception<Connected>(m, "Connected", PyExc_RuntimeError);
     PVXSExc_Disconnected = py::register_local_exception<Disconnect>(m, "Disconnected", PyExc_RuntimeError);
-    PVXSExc_Finished = py::register_local_exception<Finished>(m, "Finished", PyExc_RuntimeError);
+    // Finished derived from Disconnected in pvxs since it is a special case of Disconnect
+    PVXSExc_Finished = py::register_local_exception<Finished>(m, "Finished", PVXSExc_Disconnected);
 
     py::native_enum<Discovered::event_t>(m, "EventTypeEnum", "enum.IntEnum")
         .value("Online", Discovered::event_t::Online)
@@ -421,23 +441,10 @@ void create_submodule_client(py::module_& m) {
 
                     // GIL lock not automatically held in C++ callback, acquire GIL lock
                     py::gil_scoped_acquire lock;
-                    try {
-                        // new_data is a python dictionary, assign it
-                        // to recursively cast each key to its field
-                        py::cast(toput).attr("assign")(*new_data_ref);
-                    }
-                    catch (py::error_already_set& e) {
-                        // if any python exceptions are raised, need to catch them all
-                        // here and turn them into C++ exceptions so they can pass to
-                        // the C++ result handler without invoking Python interpreter's
-                        // error handling code
-                        if (e.matches(PyExc_KeyError))
-                            throw py::key_error(e.what());
-                        else if (e.matches(PyExc_TypeError))
-                            throw py::type_error(e.what());
-                        else
-                            throw py::value_error(e.what());
-                    }
+                    // if any exceptions are thrown here, they will be caught by the
+                    // result handler and assigned to the asyncio.Future
+                    py::cast(toput).attr("assign")(*new_data_ref);
+                    // if no exceptions, return the modified pvxs::Value that will be sent
                     return toput;
                 })
                 .result(pvxs_result_handler(loop, py_future));

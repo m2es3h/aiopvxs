@@ -28,15 +28,20 @@
 
 namespace py = pybind11;
 
+// Python equivalents for pvxs::client exceptions
+static py::object PVXSExc_NoFieldError;
+static py::object PVXSExc_NoConvertError;
+static py::object PVXSExc_FieldLookupError;
+
 
 void create_submodule_data(py::module_& m) {
     m.doc() = "Data Type and Value classes";
 
     using namespace pvxs;
 
-    py::register_exception<NoField>(m, "NoFieldError", PyExc_KeyError);
-    py::register_exception<NoConvert>(m, "NoConvertError", PyExc_TypeError);
-    py::register_exception<LookupError>(m, "FieldLookupError", PyExc_KeyError);
+    PVXSExc_NoFieldError = py::register_local_exception<NoField>(m, "NoFieldError", PyExc_KeyError);
+    PVXSExc_NoConvertError = py::register_local_exception<NoConvert>(m, "NoConvertError", PyExc_TypeError);
+    PVXSExc_FieldLookupError = py::register_local_exception<LookupError>(m, "FieldLookupError", PyExc_KeyError);
 
     py::native_enum<TypeCode::code_t>(m, "TypeCodeEnum", "enum.IntEnum")
         .value("Bool", TypeCode::code_t::Bool)
@@ -141,24 +146,24 @@ void create_submodule_data(py::module_& m) {
             for (auto item : values_dict) {
                 const std::string key = item.first.cast<std::string>();
                 const py::object& py_value = py::reinterpret_borrow<py::object>(item.second);
-                //try {
+                try {
                     py::cast(self).attr("__setattr__")(key, py_value);
-                //}
-                /*catch (py::error_already_set& e) {
+                }
+                catch (py::error_already_set& e) {
                     std::stringstream ss;
-                    if (e.matches(PyExc_KeyError)) {
+                    if (e.matches(PVXSExc_NoFieldError)) {
                         ss << "No such field '" << key << "'";
-                        py::raise_from(e, PyExc_KeyError, ss.str().c_str());
+                        py::raise_from(e, PVXSExc_NoFieldError.ptr(), ss.str().c_str());
                     }
-                    else if (e.matches(PyExc_TypeError)) {
+                    else if (e.matches(PVXSExc_NoConvertError)) {
                         auto pvxs_typename = self.lookup(key).type();
                         auto py_typename = py::str(py_value.attr("__class__").attr("__name__"));
                         ss << "Unable to assign " << pvxs_typename << " field '" << key << "' ";
                         ss << "with " << py_typename << " '" << py_value << "'";
-                        py::raise_from(e, PyExc_TypeError, ss.str().c_str());
+                        py::raise_from(e, PVXSExc_NoConvertError.ptr(), ss.str().c_str());
                     }
                     throw py::error_already_set();
-                }*/
+                }
             }
         }, "Iterate through python dictionary and cast values to Value fields")
 
