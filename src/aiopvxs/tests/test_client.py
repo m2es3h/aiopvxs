@@ -6,6 +6,7 @@ import pytest
 
 from aiopvxs.client import (Connected, Context, Disconnected, Discovered,
                             Finished, RemoteError, Subscription)
+from aiopvxs.data import NoConvertError, NoFieldError
 from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.data import Value
 from aiopvxs.nt import NTScalar
@@ -267,6 +268,32 @@ class TestEventCallbacks:
 
 @pytest.mark.asyncio
 class TestClientErrors:
+
+    async def test_put_unknown_field(self, pvxs_test_server : Server,
+                                     pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        new_value = {'value': "minus forty-three", 'nonexistent': 0}
+        put_op = client.put("scalar_string", new_value)
+
+        with pytest.raises(NoFieldError) as exc_info:
+            val = await put_op
+        assert isinstance(exc_info.value, KeyError)
+        assert "nonexistent" in str(exc_info.value)
+
+    async def test_put_wrong_type(self, pvxs_test_server : Server,
+                                  pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        new_value = {'value': "minus forty-three"}
+        put_op = client.put("scalar_int32", new_value)
+
+        with pytest.raises(NoConvertError) as exc_info:
+            val = await put_op
+        assert isinstance(exc_info.value, TypeError)
+        assert "value" in str(exc_info.value)
 
     async def test_recv_server_exception(self, pvxs_test_context : Context):
         client = pvxs_test_context
