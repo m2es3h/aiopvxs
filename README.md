@@ -148,7 +148,7 @@ except asyncio.CancelledError:
     print("put operation failed: Operation cancelled")
 except aiopvxs.client.RemoteError as e:
     print("put operation failed: Server returned exception:", e)
-except (KeyError, TypeError, LookupError) as e:
+except (TypeError, LookupError) as e:
     print("put value not compatible with pvxs.Value type:", e)
 else:
     print("put operation successful")
@@ -267,5 +267,5 @@ Value.as_dict(    Value.as_int_list(     Value.as_string_list(   Value.equalType
 Value.as_float(   Value.as_list(         Value.assign(           Value.get(          Value.type(
 ```
 
-Incompatible conversions will raise the underlying aiopvxs.data.NoConvert
+Incompatible conversions will raise the underlying aiopvxs.data.NoConvertError
 exception, or a "Cast not yet implemented" RuntimeError.

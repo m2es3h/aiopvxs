@@ -34,9 +34,9 @@ void create_submodule_data(py::module_& m) {
 
     using namespace pvxs;
 
-    py::register_exception<NoField>(m, "NoField", PyExc_KeyError);
-    py::register_exception<NoConvert>(m, "NoConvert", PyExc_TypeError);
-    py::register_exception<LookupError>(m, "LookupError", PyExc_KeyError);
+    py::register_exception<NoField>(m, "NoFieldError", PyExc_KeyError);
+    py::register_exception<NoConvert>(m, "NoConvertError", PyExc_TypeError);
+    py::register_exception<LookupError>(m, "FieldLookupError", PyExc_KeyError);
 
     py::native_enum<TypeCode::code_t>(m, "TypeCodeEnum", "enum.IntEnum")
         .value("Bool", TypeCode::code_t::Bool)

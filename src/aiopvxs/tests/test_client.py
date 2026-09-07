@@ -4,8 +4,8 @@ from asyncio import (CancelledError, Future, Queue, all_tasks, create_task,
 
 import pytest
 
-from aiopvxs.client import (Context, Disconnected, Discovered, RemoteError,
-                            Subscription)
+from aiopvxs.client import (Connected, Context, Disconnected, Discovered,
+                            RemoteError, Subscription)
 from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.data import Value
 from aiopvxs.server import Server
@@ -35,7 +35,7 @@ class TestClientRPC:
 
         rpc_op = client.rpc("scalar_int32")
         assert isinstance(rpc_op, Future)
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(RemoteError) as exc_info:
             val = await rpc_op
 
     async def test_rpc_cancel(self, pvxs_test_context : Context):
@@ -200,7 +200,8 @@ class TestEventCallbacks:
         server = pvxs_test_server
         client = pvxs_test_context
 
-        monitor_op = client.monitor("scalar_int32")
+        monitor_op = client.monitor("scalar_int32", mask_connected=False,
+                                    mask_disconnected=False)
         assert isinstance(monitor_op, Subscription)
 
         next_val = -42
@@ -209,7 +210,11 @@ class TestEventCallbacks:
                 async for val in monitor_op:
                     # test that type code Null is never returned
                     assert val  # if(val) == True when type code is a Struct
+                    if isinstance(val, Connected):
+                        _log.info("Connected event received")
+                        continue
                     if isinstance(val, Disconnected):
+                        _log.info("Disconnected event received")
                         break
 
                     assert val.value.as_int() == next_val
@@ -219,7 +224,7 @@ class TestEventCallbacks:
                         next_val += 1  # count up towards zero
                         await client.put("scalar_int32", {'value': next_val})
         except TimeoutError:
-            pass
+            assert False, "Disconnected event never received"
         finally:
             monitor_op.cancel()
 
