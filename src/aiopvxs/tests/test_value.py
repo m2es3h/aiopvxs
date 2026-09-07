@@ -203,6 +203,16 @@ class TestValueOps:
         assert nt_value.get('nonexistant') == None
         assert nt_value.get('nonexistant', {}) == {}
 
+    def test_get_attr(self):
+        test_string = "Hello, 👋"
+
+        nt_value = NTScalar(T.String).create()
+        nt_value['value'] = test_string
+        assert str(nt_value.value) == test_string
+        assert hasattr(nt_value, 'nonexistant') == False
+        with pytest.raises(AttributeError):
+            _ = nt_value.nonexistant
+
     def test_value_iteration(self, nt_enum_init_dict):
         test_dict = nt_enum_init_dict
         nt_value = NTEnum().create()
