@@ -29,6 +29,12 @@
 
 namespace py = pybind11;
 
+// Python equivalents for pvxs::client exceptions
+static py::object PVXSExc_RemoteError;
+static py::object PVXSExc_Connected;
+static py::object PVXSExc_Disconnected;
+static py::object PVXSExc_Finished;
+
 /*
  * get_asyncio_module()
  *
@@ -42,6 +48,22 @@ py::object& get_asyncio_module() {
     return storage.call_once_and_store_result([]() {
         // This code runs only once (with the GIL held)
         return py::module_::import("asyncio");
+    }).get_stored();
+}
+
+/*
+ * get_builtins_RuntimeError()
+ *
+ * Imports the python RuntimeError exception class once and
+ * returns a reference to it when needed.
+ */
+py::object& get_builtins_RuntimeError() {
+    PYBIND11_CONSTINIT \
+        static py::gil_safe_call_once_and_store<py::object> storage;
+
+    return storage.call_once_and_store_result([]() {
+        // This code runs only once (with the GIL held)
+        return py::module_::import("builtins").attr("RuntimeError");
     }).get_stored();
 }
 
@@ -87,8 +109,8 @@ pvxs_result_handler(py::object loop_obj, py::object py_future_obj) {
         }
         // if exception, schedule asyncio.Future.set_exception(py_exc)
         // call on the event loop
-        catch (const py::key_error& e) {
-            py::object py_exc = py::module_::import("builtins").attr("KeyError")(e.what());
+        catch (const pvxs::client::RemoteError& rem) {
+            py::object py_exc = PVXSExc_RemoteError(rem.what());
 
             loop.attr("call_soon_threadsafe")(
                 py::cpp_function([py_future, py_exc]() {
@@ -96,26 +118,11 @@ pvxs_result_handler(py::object loop_obj, py::object py_future_obj) {
                 })
             );
         }
-        catch (const py::type_error& e) {
-            py::object py_exc = py::module_::import("builtins").attr("TypeError")(e.what());
-
-            loop.attr("call_soon_threadsafe")(
-                py::cpp_function([py_future, py_exc]() {
-                    py_future.attr("set_exception")(py_exc);
-                })
-            );
-        }
-        catch (const py::value_error& e) {
-            py::object py_exc = py::module_::import("builtins").attr("ValueError")(e.what());
-
-            loop.attr("call_soon_threadsafe")(
-                py::cpp_function([py_future, py_exc]() {
-                    py_future.attr("set_exception")(py_exc);
-                })
-            );
-        }
-        catch (const std::exception& e) {
-            py::object py_exc = py::module_::import("builtins").attr("RuntimeError")(e.what());
+        // safe catch-all for any other exceptions
+        catch (const std::exception& exc) {
+            py::object py_exc = get_builtins_RuntimeError()(exc.what());
+            py::print("Unexpected C++ exception thrown in monitor callback:",
+                        exc.what());
 
             loop.attr("call_soon_threadsafe")(
                 py::cpp_function([py_future, py_exc]() {
@@ -191,20 +198,22 @@ public:
                 py_queue.attr("put_nowait")(py::cast(val));
         }
         catch (const pvxs::client::Finished& fin) {
-            py_queue.attr("put_nowait")(py::cast(fin));
+            py_queue.attr("put_nowait")(PVXSExc_Finished(fin.what()));
         }
         catch (const pvxs::client::Connected& con) {
-            py_queue.attr("put_nowait")(py::cast(con));
+            py_queue.attr("put_nowait")(PVXSExc_Connected(con.what()));
         }
         catch (const pvxs::client::Disconnect& dis) {
-            py_queue.attr("put_nowait")(py::cast(dis));
+            py_queue.attr("put_nowait")(PVXSExc_Disconnected(dis.what()));
         }
-        catch (const pvxs::client::RemoteError& err) {
-            py_queue.attr("put_nowait")(py::cast(err));
+        catch (const pvxs::client::RemoteError& rem) {
+            py_queue.attr("put_nowait")(PVXSExc_RemoteError(rem.what()));
         }
         catch (const std::exception& exc) {
-            py::print("C++ exception thrown in monitor callback:", exc.what());
-            py_queue.attr("put_nowait")(py::cast(exc));
+            py::print("Unexpected C++ exception thrown in monitor callback:",
+                        exc.what());
+            auto val = get_builtins_RuntimeError()(exc.what());
+            py_queue.attr("put_nowait")(val);
         }
 
         // return asyncio.Queue.get() co-routine
@@ -266,19 +275,12 @@ void create_submodule_client(py::module_& m) {
     using namespace pvxs;
     using namespace pvxs::client;
 
-    //py::register_exception<RemoteError>(m, "RemoteError", PyExc_RuntimeError);
-    //py::register_exception<Connected>(m, "Connected", PyExc_RuntimeError);
-    //py::register_exception<Disconnect>(m, "Disconnected", PyExc_RuntimeError);
-    //py::register_exception<Finished>(m, "Finished", PyExc_RuntimeError);
-
-    py::class_<RemoteError>(m, "RemoteError", "")
-        .def(py::init<const std::string&>());
-    py::class_<Connected>(m, "Connected", "")
-        .def(py::init<const std::string&>());
-    py::class_<Disconnect>(m, "Disconnected", "")
-        .def(py::init<>());
-    py::class_<Finished>(m, "Finished", "")
-        .def(py::init<>());
+    // create python exception types for pvxs::client exceptions with
+    // python builtin RuntimeError as base class
+    PVXSExc_RemoteError = py::register_local_exception<RemoteError>(m, "RemoteError", PyExc_RuntimeError);
+    PVXSExc_Connected = py::register_local_exception<Connected>(m, "Connected", PyExc_RuntimeError);
+    PVXSExc_Disconnected = py::register_local_exception<Disconnect>(m, "Disconnected", PyExc_RuntimeError);
+    PVXSExc_Finished = py::register_local_exception<Finished>(m, "Finished", PyExc_RuntimeError);
 
     py::native_enum<Discovered::event_t>(m, "EventTypeEnum", "enum.IntEnum")
         .value("Online", Discovered::event_t::Online)
@@ -527,7 +529,8 @@ void create_submodule_client(py::module_& m) {
            "never return a result, rather the discover results will arrive via the provided "
            "callback function.")
 
-        .def("monitor", [](Context& self, std::string& pv_name) {
+        .def("monitor", [](Context& self, std::string& pv_name,
+                           bool mask_connected, bool mask_disconnected) {
             // the result of this method is an aiopvxs.client.Subscription
             py::object loop = get_asyncio_module().attr("get_event_loop")();
             py::object py_queue = get_asyncio_module().attr("Queue")();
@@ -538,6 +541,8 @@ void create_submodule_client(py::module_& m) {
 
             // make a MonitorBuilder
             auto op_builder = self.monitor(pv_name)
+                .maskConnected(mask_connected)
+                .maskDisconnected(mask_disconnected)
                 .event([loop_ref, py_queue_ref](Subscription& sub) {
                     // GIL lock not automatically held in C++ callback,
                     // acquire GIL lock when adding to event loop
@@ -549,13 +554,14 @@ void create_submodule_client(py::module_& m) {
                         // was called, get it or trigger exception
                         val = py::cast(sub.pop());
                     }
-                    catch (const Finished& fin) { val = py::cast(fin); }
-                    catch (const Connected& con) { val = py::cast(con); }
-                    catch (const Disconnect& dis) { val = py::cast(dis); }
-                    catch (const RemoteError& rem) { val = py::cast(rem); }
+                    catch (const Finished& fin) { val = PVXSExc_Finished(fin.what()); }
+                    catch (const Connected& con) { val = PVXSExc_Connected(con.what()); }
+                    catch (const Disconnect& dis) { val = PVXSExc_Disconnected(dis.what()); }
+                    catch (const RemoteError& rem) { val = PVXSExc_RemoteError(rem.what()); }
                     catch (const std::exception& exc) {
-                        py::print("C++ exception thrown in monitor callback:", exc.what());
-                        val = py::cast(exc);
+                        py::print("Unexpected C++ exception thrown in monitor callback:",
+                                  exc.what());
+                        val = get_builtins_RuntimeError()(exc.what());
                     }
 
                     py::object py_queue = *py_queue_ref;
@@ -577,7 +583,8 @@ void create_submodule_client(py::module_& m) {
             auto sub_with_event = AsyncSubscription(sub, py_queue);
             // return the subscription
             return sub_with_event;
-        }, "Constructs a MonitorBuilder for the operation and executes it, returning "
+        }, py::arg("pv_name"), py::arg("mask_connected") = true, py::arg("mask_disconnected") = false,
+           "Constructs a MonitorBuilder for the operation and executes it, returning "
            "an aiopvxs.client.Subscription object that can be iterated with an async "
            "for loop or cancelled.");
 }
