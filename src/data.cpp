@@ -136,8 +136,19 @@ void create_submodule_data(py::module_& m) {
             return py::make_iterator(self.ichildren().begin(), self.ichildren().end());
         }, py::keep_alive<0, 1>(), "Iterate through outer-most fields in Value")
 
-        .def("__getattr__", static_cast<Value (Value::*)(const std::string&)>(&Value::lookup),
-                            "Lookup and return field in Value (no casting)")
+        .def("__getattr__", [](const Value& self, const std::string& name) {
+            try {
+                return self.lookup(name);
+            }
+            // __getattr__() should raise AttributeError if field is not found
+            // hasattr(), copy, pickle and inspect depend on this behaviour
+            catch (const NoField& e) {
+                throw py::attribute_error(e.what());
+            }
+            catch (const LookupError& e) {
+                throw py::attribute_error(e.what());
+            }
+        }, "Lookup and return field in Value (no casting)")
         .def("__getitem__", static_cast<Value (Value::*)(const std::string&)>(&Value::lookup),
                             "Lookup and return field in Value (no casting)")
 
