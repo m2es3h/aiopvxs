@@ -29,6 +29,54 @@
 
 namespace py = pybind11;
 
+/*
+ * python_op_handler
+ *
+ * Wraps a python SharedPV callback so that an exception within the
+ * callback is reported to the caller with ExecOp::error().
+ *
+ */
+inline std::function<void(pvxs::server::SharedPV&,
+                          std::unique_ptr<pvxs::server::ExecOp>&&,
+                          pvxs::Value&&)>
+python_op_handler(py::function py_fn, std::string source_hint) {
+    // reference to callback function will be destructed by a pvxs worker thread
+    // ensure that the Python objects are destructed while holding the GIL
+    auto callback_ref = pvxs_call_cpp_dtor_with_gil(py_fn);
+
+    return [callback_ref, source_hint](pvxs::server::SharedPV& pv,
+                                       std::unique_ptr<pvxs::server::ExecOp>&& op,
+                                       pvxs::Value&& val) {
+        // GIL lock not automatically held in C++ callback, acquire
+        py::gil_scoped_acquire lock;
+        // transfer ownership of ExecOp to a py::object (callback should not
+        // consume the op, might need to call op.error() after py_fn() call)
+        py::object py_op = py::cast(std::move(op));
+
+        try {
+            // run the python callback -> py_fn(pv, op, value)
+            py::object callback = *callback_ref;
+            callback(py::cast(pv), py_op, py::cast(std::move(val)));
+        }
+        catch (py::error_already_set& e) {
+            // if a python exception escapes the callback, set the
+            // op.error() so the client gets the exception message
+            try {
+                std::stringstream ss;
+                ss << (e.type() ? py::str(e.type().attr("__name__")).cast<std::string>()
+                                : "Exception");
+                ss << ": ";
+                ss << (e.value() ? py::str(e.value()).cast<std::string>()
+                                 : e.what());
+                py_op.cast<pvxs::server::ExecOp&>().error(ss.str());
+            }
+            catch (...) {}  // let no further exceptions escape
+            // report the full traceback via sys.unraisablehook
+            e.discard_as_unraisable(source_hint.c_str());
+        }
+    };
+}
+
 
 void create_submodule_server(py::module_& m) {
     m.doc() = "PVAccess Server API";
@@ -83,8 +131,14 @@ void create_submodule_server(py::module_& m) {
         .def("close", &SharedPV::close, "Disconnects any active clients of SharedPV")
         .def("post", &SharedPV::post, "Update the cached value of SharedPV")
 
-        .def("onPut", &SharedPV::onPut, "Install a custom callback function for PUT operations on this PV.")
-        .def("onRPC", &SharedPV::onRPC, "Install a custom callback function for RPC operations on this PV.");
+        //.def("onPut", &SharedPV::onPut)
+        .def("onPut", [](SharedPV& self, py::function py_fn) {
+            self.onPut(python_op_handler(py_fn, "aiopvxs SharedPV onPut callback"));
+        }, "Install a custom callback function for PUT operations on this PV.")
+        //.def("onRPC", &SharedPV::onRPC);
+        .def("onRPC", [](SharedPV& self, py::function py_fn) {
+            self.onRPC(python_op_handler(py_fn, "aiopvxs SharedPV onRPC callback"));
+        }, "Install a custom callback function for RPC operations on this PV.");
 
     // Server::Pvt::~Pvt() calls stop(), which wait for pvxs workers, which might
     // be waiting for the GIL, so do not hold GIL on Server destruction

@@ -5,10 +5,11 @@ from asyncio import (CancelledError, Future, Queue, all_tasks, create_task,
 import pytest
 
 from aiopvxs.client import (Connected, Context, Disconnected, Discovered,
-                            RemoteError, Subscription)
+                            Finished, RemoteError, Subscription)
 from aiopvxs.data import TypeCodeEnum as T
 from aiopvxs.data import Value
-from aiopvxs.server import Server
+from aiopvxs.nt import NTScalar
+from aiopvxs.server import Server, SharedPV
 
 _log = logging.getLogger(__file__)
 
@@ -37,6 +38,7 @@ class TestClientRPC:
         assert isinstance(rpc_op, Future)
         with pytest.raises(RemoteError) as exc_info:
             val = await rpc_op
+        assert isinstance(exc_info.value, RuntimeError)
 
     async def test_rpc_cancel(self, pvxs_test_context : Context):
         client = pvxs_test_context
@@ -46,6 +48,9 @@ class TestClientRPC:
 
         with pytest.raises(CancelledError) as exc_info:
             val = await rpc_op
+
+        await sleep(0.01)
+        assert rpc_op.cancelled()
 
     async def test_rpc_execute_no_args(self, pvxs_test_server : Server,
                                        pvxs_test_context : Context):
@@ -120,6 +125,9 @@ class TestClientGetPut:
 
         with pytest.raises(CancelledError) as exc_info:
             val = await get_op
+
+        await sleep(0.01)
+        assert get_op.cancelled()
 
     async def test_put_cancel(self, pvxs_test_context : Context):
         client = pvxs_test_context
@@ -235,3 +243,46 @@ class TestEventCallbacks:
 
         # fail if loop did not iterate the expected number of times
         assert next_val == 0
+
+    async def test_monitor_mask_args(self, pvxs_test_server : Server,
+                           pvxs_test_context : Context):
+        server = pvxs_test_server
+        client = pvxs_test_context
+
+        monitor_op = client.monitor("scalar_int32", mask_connected=False,
+                                    mask_disconnected=True)
+        assert isinstance(monitor_op, Subscription)
+
+        try:
+            async with timeout(3):
+                async for val in monitor_op:
+                    if isinstance(val, Connected):
+                        _log.info("Connected event received")
+                        break
+        except TimeoutError:
+            assert False, "Connected event never received"
+        finally:
+            monitor_op.cancel()
+
+
+@pytest.mark.asyncio
+class TestClientErrors:
+
+    async def test_recv_server_exception(self, pvxs_test_context : Context):
+        client = pvxs_test_context
+
+        pv = SharedPV()
+        pv.open(NTScalar(T.Int32).create())
+
+        def rpc_callback(pv, op, value):
+            raise ValueError("NOPE")
+
+        pv.onRPC(rpc_callback)
+
+        with Server({'bad_rpc': pv}) as srv:
+            with pytest.raises(RemoteError) as exc_info:
+                await wait_for(client.rpc('bad_rpc'), timeout=3)
+
+        assert "ValueError" in str(exc_info.value)
+        assert "NOPE" in str(exc_info.value)
+        pv.close()
