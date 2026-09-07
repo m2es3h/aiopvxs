@@ -70,9 +70,10 @@ python_op_handler(py::function py_fn, std::string source_hint) {
                                  : e.what());
                 py_op.cast<pvxs::server::ExecOp&>().error(ss.str());
             }
-            catch (...) {}  // let no further exceptions escape
-            // report the full traceback via sys.unraisablehook
-            e.discard_as_unraisable(source_hint.c_str());
+            catch (...) {  // let no further exceptions escape
+                // report the full traceback via sys.unraisablehook
+                e.discard_as_unraisable(source_hint.c_str());
+            }
         }
     };
 }
