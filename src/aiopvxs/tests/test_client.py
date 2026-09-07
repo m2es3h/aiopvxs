@@ -97,7 +97,12 @@ class TestClientGetPut:
         server = pvxs_test_server
         client = pvxs_test_context
 
-        put_op = client.put("scalar_string", {'value': "minus forty-three", 'alarm.message': "OK"})
+        new_value = {'value': "minus forty-three", 'alarm.message': "OK"}
+        put_op = client.put("scalar_string", new_value)
+        # put_op should have its own deep copy of the data, so this
+        # following line should not affect the value sent to the server
+        new_value['value'] = "change after put call"
+
         assert isinstance(put_op, Future)
         val = await put_op
         assert isinstance(val, Value)

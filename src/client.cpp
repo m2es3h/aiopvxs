@@ -68,6 +68,22 @@ py::object& get_builtins_RuntimeError() {
 }
 
 /*
+ * get_deepcopy_module()
+ *
+ * Imports the python copy.deepcopy module once and
+ * returns a reference to it when needed.
+ */
+py::object& get_deepcopy_module() {
+    PYBIND11_CONSTINIT \
+        static py::gil_safe_call_once_and_store<py::object> storage;
+
+    return storage.call_once_and_store_result([]() {
+        // This code runs only once (with the GIL held)
+        return py::module_::import("copy").attr("deepcopy");
+    }).get_stored();
+}
+
+/*
  * pvxs_result_handler
  *
  * Returns a std::function<> that can be used as client Context
@@ -391,7 +407,8 @@ void create_submodule_client(py::module_& m) {
             py::object py_future = loop.attr("create_future")();
             // these python objects will be destructed by a pvxs worker thread
             // ensure that the Python objects are destructed while holding the GIL
-            auto new_data_ref = pvxs_call_cpp_dtor_with_gil(new_data);
+            py::object copy_of_new_data = get_deepcopy_module()(new_data);
+            auto new_data_ref = pvxs_call_cpp_dtor_with_gil(copy_of_new_data);
 
             // make a PutBuilder with result callback that assigns the result of the
             // operation to an asyncio.Future (using either set_result() or set_exception())
@@ -431,10 +448,8 @@ void create_submodule_client(py::module_& m) {
             py_future.attr("add_done_callback")(py_future_done_handler(op));
             // return asyncio.Future representing the future result of the operation
             return py_future;
-        // the py::keep_alive means the 3rd argument (py::object new_data) must live at least as long
-        // as the return value, otherwise new_data might get cleaned up before .build() callback
-        }, py::keep_alive<0, 3>(), "Constructs a PutBuilder for the operation and executes it, returning "
-                                   "an asyncio.Future representing the future result of the operation")
+        }, "Constructs a PutBuilder for the operation and executes it, returning "
+           "an asyncio.Future representing the future result of the operation")
 
         .def("rpc", [](Context& self, std::string& pv_name, py::kwargs kwargs) {
             // the result of this method is an asyncio.Future, so rpc() can be
