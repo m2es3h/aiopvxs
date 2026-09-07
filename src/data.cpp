@@ -206,7 +206,10 @@ void create_submodule_data(py::module_& m) {
             try {
                 return py::cast(self.lookup(name));
             }
-            catch (const std::exception& e) {
+            catch (const NoField& e) {
+                return def_value;
+            }
+            catch (const LookupError& e) {
                 return def_value;
             }
         }, py::arg("name"), py::arg("def_value") = py::none(),
