@@ -45,6 +45,7 @@ void create_submodule_data(py::module_& m) {
 
     py::native_enum<TypeCode::code_t>(m, "TypeCodeEnum", "enum.IntEnum")
         .value("Bool", TypeCode::code_t::Bool)
+        .value("BoolA", TypeCode::code_t::BoolA)
         .value("UInt8", TypeCode::code_t::UInt8)
         .value("UInt8A", TypeCode::code_t::UInt8A)
         .value("UInt16", TypeCode::code_t::UInt16)
@@ -245,7 +246,8 @@ void create_submodule_data(py::module_& m) {
 
         .def("as_list", [](const Value& self) {
             auto sa = self.as<shared_array<const void>>();
-            if (sa.original_type() == ArrayType::String)
+            if (sa.original_type() == ArrayType::String ||
+                    sa.original_type() == ArrayType::Bool)
                 return py::cast(sa);
             else if (sa.original_type() == ArrayType::Null)
                 return py::list().cast<py::object>();
@@ -320,6 +322,9 @@ void create_submodule_data(py::module_& m) {
             size_t elem_size;
             switch (sa.original_type()) {
                 case ArrayType::Bool:
+                    desc = py::format_descriptor<bool>::value;
+                    elem_size = sizeof(uint8_t);
+                    break;
                 case ArrayType::UInt8:
                     desc = py::format_descriptor<uint8_t>::value;
                     elem_size = sizeof(uint8_t);

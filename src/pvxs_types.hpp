@@ -100,7 +100,6 @@ py::object cast_to_python_array(const shared_array<const void>& sa) {
 
     // return python array with copy of shared_array contents
     switch (sa.original_type()) {
-        case ArrayType::Bool:
         case ArrayType::UInt8:
             return make_python_array<uint8_t>(sa);
         case ArrayType::UInt16:
@@ -121,6 +120,8 @@ py::object cast_to_python_array(const shared_array<const void>& sa) {
             return make_python_array<float>(sa);
         case ArrayType::Float64:
             return make_python_array<double>(sa);
+        case ArrayType::Bool:
+            throw std::runtime_error("Cannot cast boolean array to python array.");
         default:
             throw std::runtime_error("Cast not yet implemented.");
     }
@@ -142,6 +143,13 @@ struct type_caster<shared_array<const void>> {
             for (auto& item : sa.castTo<const std::string>())
                 py_str_list.append(item);
             return py_str_list.release();
+        }
+        // return a list of bools if shared_array<bool> type
+        else if (sa.original_type() == ArrayType::Bool) {
+            py::list py_bool_list;
+            for (auto& item : sa.castTo<const bool>())
+                py_bool_list.append(item);
+            return py_bool_list.release();
         }
         // inspect original data type in shared_array and copy-construct new python array
         else {

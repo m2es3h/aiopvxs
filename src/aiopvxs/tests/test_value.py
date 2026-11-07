@@ -4,6 +4,7 @@ import logging
 import pytest
 
 from aiopvxs.data import TypeCodeEnum as T
+from aiopvxs.data import Member, TypeDef
 from aiopvxs.data import Value
 from aiopvxs.nt import NTEnum, NTScalar
 
@@ -153,6 +154,21 @@ class TestValueCasts:
         assert nt_value.value.as_list() == test_strings
         assert nt_value.value.as_string_list() == test_strings
         assert nt_value.value.as_py() == test_strings
+
+    def test_boolean_array(self):
+        value = TypeDef(T.Struct, [Member(T.BoolA, "flags")]).create()
+        value.flags = [False, True, True]
+        value.flags.as_view()[2] = False
+        assert value.flags.as_py() == [False, True, False]
+        assert value.flags.as_list() == [False, True, False]
+        assert value.flags.as_array() == [False, True, False]
+        assert value.flags.as_view().tolist() == [False, True, False]
+        assert value.flags.as_int_list() == [0, 1, 0]
+
+        # there is no boolean type for python arrays, byte arrays should convert
+        value.flags = array.array('B', [False, True, True])
+        assert value.flags.as_list() == [False, True, True]
+        assert value.flags.as_view().tolist() == [False, True, True]
 
     def test_dictionary(self, nt_enum_init_dict):
         test_dict = nt_enum_init_dict
