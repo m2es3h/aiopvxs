@@ -4,6 +4,7 @@ import logging
 import pytest
 
 from aiopvxs.data import TypeCodeEnum as T
+from aiopvxs.data import Member, TypeDef
 from aiopvxs.data import Value
 from aiopvxs.nt import NTEnum, NTScalar
 
@@ -19,8 +20,10 @@ class TestValueCasts:
         nt_value['value'] = py_value
         assert bool(nt_value.value) == bool(py_value)
         assert int(nt_value.value) == int(py_value)
+        assert nt_value.value.as_int() == py_value
         assert float(nt_value.value) == pytest.approx(float(py_value))
         assert nt_value.value.as_py() == py_value
+        assert nt_value.as_dict()['value'] == py_value
 
     def test_float_types(self, nt_float_scalars : tuple):
         nt_type, _, py_value = nt_float_scalars
@@ -93,6 +96,21 @@ class TestValueCasts:
         assert nt_value.value.as_int_list() == py_value
         assert nt_value.value.as_float_list() == [float(x) for x in py_value]
         assert nt_value.value.as_py() == py_value
+
+    def test_array_of_bools(self):
+        value = TypeDef(T.Struct, [Member(T.BoolA, "flags")]).create()
+        value.flags = [False, True, True]
+        value.flags.as_view()[2] = False
+        assert value.flags.as_py() == [False, True, False]
+        assert value.flags.as_list() == [False, True, False]
+        assert value.flags.as_array() == [False, True, False]
+        assert value.flags.as_view().tolist() == [False, True, False]
+        assert value.flags.as_int_list() == [0, 1, 0]
+
+        # there is no boolean type for python arrays, byte arrays should convert
+        value.flags = array.array('B', [False, True, True])
+        assert value.flags.as_list() == [False, True, True]
+        assert value.flags.as_view().tolist() == [False, True, True]
 
     def test_sequence_of_ints(self, nt_integer_arrays : tuple):
         nt_type, _, py_value = nt_integer_arrays
