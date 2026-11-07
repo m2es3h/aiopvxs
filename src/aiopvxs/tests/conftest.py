@@ -44,7 +44,7 @@ async def pvxs_test_server() -> AsyncGenerator[Server]:
     (NTScalar(T.UInt8),  'B', 2**8-1),
     (NTScalar(T.UInt16), 'H', 2**16-1),
     (NTScalar(T.UInt32), 'I', 2**32-1),
-    (NTScalar(T.UInt64), 'Q', sys.maxsize),
+    (NTScalar(T.UInt64), 'Q', 2**64-1),
     (NTScalar(T.Int8),   'b', -2**7),
     (NTScalar(T.Int16),  'h', -2**15),
     (NTScalar(T.Int32),  'i', -2**31),

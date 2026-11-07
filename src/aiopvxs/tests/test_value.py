@@ -19,8 +19,10 @@ class TestValueCasts:
         nt_value['value'] = py_value
         assert bool(nt_value.value) == bool(py_value)
         assert int(nt_value.value) == int(py_value)
+        assert nt_value.value.as_int() == py_value
         assert float(nt_value.value) == pytest.approx(float(py_value))
         assert nt_value.value.as_py() == py_value
+        assert nt_value.as_dict()['value'] == py_value
 
     def test_float_types(self, nt_float_scalars : tuple):
         nt_type, _, py_value = nt_float_scalars

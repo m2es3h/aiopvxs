@@ -182,6 +182,8 @@ void create_submodule_data(py::module_& m) {
                             "Lookup field in Value and cast python int to Value")
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>),
                             "Lookup field in Value and cast python float to Value")
+        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const uint64_t&)>(&Value::update<const uint64_t&, std::string&>),
+                            "Lookup field in Value and cast python int to Value")
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>),
                             "Lookup field in Value and cast python string to Value")
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>),
@@ -194,6 +196,8 @@ void create_submodule_data(py::module_& m) {
                             "Lookup field in Value and cast python int to Value")
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>),
                             "Lookup field in Value and cast python float to Value")
+        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const uint64_t&)>(&Value::update<const uint64_t&, std::string&>),
+                            "Lookup field in Value and cast python int to Value")
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>),
                             "Lookup field in Value and cast python string to Value")
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>),
@@ -226,10 +230,18 @@ void create_submodule_data(py::module_& m) {
                 return self.as<bool>();
         }, "Cast Value to python bool")
 
-        .def("as_int", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>),
-                       "Returns a python int representation of Value")
-        .def("__int__", static_cast<int64_t (Value::*)(void) const>(&Value::as<int64_t>),
-                        "Cast Value to python int")
+        .def("as_int",  [](const Value& self) {
+            if (self.storageType() == StoreType::UInteger)
+                return py::cast(self.as<uint64_t>());
+            else
+                return py::cast(self.as<int64_t>());
+        }, "Returns a python int representation of Value")
+        .def("__int__", [](const Value& self) {
+            if (self.storageType() == StoreType::UInteger)
+                return py::cast(self.as<uint64_t>());
+            else
+                return py::cast(self.as<int64_t>());
+        }, "Cast Value to python int")
 
         .def("as_list", [](const Value& self) {
             auto sa = self.as<shared_array<const void>>();
@@ -250,6 +262,7 @@ void create_submodule_data(py::module_& m) {
                     case StoreType::Bool:
                         return py::cast(self.as<bool>());
                     case StoreType::UInteger:
+                        return py::cast(self.as<uint64_t>());
                     case StoreType::Integer:
                         return py::cast(self.as<int64_t>());
                     case StoreType::Real:
@@ -277,6 +290,8 @@ void create_submodule_data(py::module_& m) {
                             py_dict[key] = py::cast(item.as<bool>());
                             break;
                         case StoreType::UInteger:
+                            py_dict[key] = py::cast(item.as<uint64_t>());
+                            break;
                         case StoreType::Integer:
                             py_dict[key] = py::cast(item.as<int64_t>());
                             break;
