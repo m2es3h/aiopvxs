@@ -11,6 +11,9 @@ name: Upload Python Package
 on:
   release:
     types: [published]
+  push:
+    branches:
+      - 'ci/**'
 
 permissions:
   contents: read
@@ -21,8 +24,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # macos-15 is Intel silicon, macos-14 is Apple silicon
-        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-14]
+        # macos-latest is Apple arm64 silicon
+        os: [windows-latest, ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest]
 
     steps:
       - uses: actions/checkout@v6
@@ -41,6 +44,7 @@ jobs:
 
   pypi-publish:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'release' }}
     needs:
       - release-build
     permissions:
