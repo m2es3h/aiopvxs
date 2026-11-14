@@ -179,12 +179,12 @@ void create_submodule_data(py::module_& m) {
             }
         }, "Iterate through python dictionary and cast values to Value fields")
 
+        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const uint64_t&)>(&Value::update<const uint64_t&, std::string&>),
+                            "Lookup field in Value and cast python int to Value")
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>),
                             "Lookup field in Value and cast python int to Value")
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>),
                             "Lookup field in Value and cast python float to Value")
-        .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const uint64_t&)>(&Value::update<const uint64_t&, std::string&>),
-                            "Lookup field in Value and cast python int to Value")
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>),
                             "Lookup field in Value and cast python string to Value")
         .def("__setattr__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>),
@@ -193,12 +193,12 @@ void create_submodule_data(py::module_& m) {
             py::cast(self.lookup(name)).attr("assign")(values_dict);
         }, "Lookup field in Value and cast python dictionary to Value")
 
+        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const uint64_t&)>(&Value::update<const uint64_t&, std::string&>),
+                            "Lookup field in Value and cast python int to Value")
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const int64_t&)>(&Value::update<const int64_t&, std::string&>),
                             "Lookup field in Value and cast python int to Value")
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const double&)>(&Value::update<const double&, std::string&>),
                             "Lookup field in Value and cast python float to Value")
-        .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const uint64_t&)>(&Value::update<const uint64_t&, std::string&>),
-                            "Lookup field in Value and cast python int to Value")
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const std::string&)>(&Value::update<const std::string&, std::string&>),
                             "Lookup field in Value and cast python string to Value")
         .def("__setitem__", static_cast<Value& (Value::*)(std::string&, const shared_array<const void>&)>(&Value::update<const shared_array<const void>&, std::string&>),
